@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "185199789255",
+    "firebase_url": "https://qlchild-default-rtdb.firebaseio.com",
+    "project_id": "qlchild",
+    "storage_bucket": "qlchild.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:185199789255:android:9c455aa09ba3284aff2ae2",
+        "android_client_info": {
+          "package_name": "com.childtracker.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD7pOq8BJZ-y-8fLeGa5AqHsMC5fA6hUkw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:185199789255:android:1a138bcaa24a8b25ff2ae2",
+        "android_client_info": {
+          "package_name": "com.example.childtrackerapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD7pOq8BJZ-y-8fLeGa5AqHsMC5fA6hUkw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:185199789255:android:dd0cf5a6cc06f782ff2ae2",
+        "android_client_info": {
+          "package_name": "com.example.quan_ly_cha_con"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD7pOq8BJZ-y-8fLeGa5AqHsMC5fA6hUkw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
