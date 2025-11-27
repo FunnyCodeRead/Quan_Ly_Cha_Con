@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:quan_ly_cha_con/main.dart';
 import 'package:quan_ly_cha_con/services/auth/session_manager.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 // Mock SessionManager
 class MockSessionManager extends Mock implements SessionManager {}

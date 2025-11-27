@@ -1,12 +1,21 @@
+// main.dart
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import 'package:quan_ly_cha_con/routes/app_routes.dart';
 import 'package:quan_ly_cha_con/repositories/athu/auth_repository.dart';
+import 'package:quan_ly_cha_con/repositories/location_repository.dart';
 import 'package:quan_ly_cha_con/services/auth/session_manager.dart';
+import 'package:quan_ly_cha_con/services/location_service_location_pkg.dart';
 import 'package:quan_ly_cha_con/ui/screens/Auth/login_screen.dart';
 import 'package:quan_ly_cha_con/ui/screens/child/ChildMainScreen.dart';
+import 'package:quan_ly_cha_con/ui/screens/parent/ParentMainScreen.dart';
 import 'package:quan_ly_cha_con/viewmodel/auth/auth_view_model.dart';
+import 'package:quan_ly_cha_con/viewmodel/parent/parent_location_view_model.dart';
+import 'package:quan_ly_cha_con/viewmodel/children/child_location_view_model.dart';
+
+
 import 'firebase_options.dart';
 
 void main() async {
@@ -14,42 +23,57 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   final sessionManager = await SessionManager.init();
-
   runApp(MyApp(sessionManager: sessionManager));
 }
 
 class MyApp extends StatelessWidget {
   final SessionManager sessionManager;
-
-  const MyApp({required this.sessionManager});
+  const MyApp({required this.sessionManager, Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
         Provider<SessionManager>(create: (_) => sessionManager),
+
         ChangeNotifierProvider(
-          create: (context) => AuthViewModel(
+          create: (_) => AuthViewModel(
             authRepository: AuthRepositoryImpl(),
             sessionManager: sessionManager,
           ),
         ),
+
+        ChangeNotifierProvider(
+          create: (_) => ParentLocationViewModel(LocationRepositoryImpl()),
+        ),
+
+
+        ChangeNotifierProvider(
+          create: (_) => ChildLocationViewModel(
+            LocationRepositoryImpl(),
+            LocationServiceImpl(),
+          ),
+        ),
       ],
       child: MaterialApp(
-        title: 'Child Tracker',
+        debugShowCheckedModeBanner: false,
         theme: ThemeData(useMaterial3: true),
-        home: _buildHome(sessionManager),
+        routes: AppRoutes.routes,
+        home: _startScreen(sessionManager),
       ),
     );
   }
 
-  Widget _buildHome(SessionManager sessionManager) {
+  Widget _startScreen(SessionManager sessionManager) {
     return sessionManager.isLoggedIn
         ? const SplashScreen()
         : const LoginScreen();
   }
 }
 
+// =============================
+// SPLASH – kiểm tra role và điều hướng
+// =============================
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
 
@@ -67,64 +91,28 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _init() async {
     await Future.delayed(const Duration(milliseconds: 500));
 
-    if (mounted) {
-      final viewModel = context.read<AuthViewModel>();
-      await viewModel.loadUserFromStorage();
+    final authVM = context.read<AuthViewModel>();
+    await authVM.loadUserFromStorage();
+    if (!mounted) return;
 
-      if (mounted) {
-        final role = viewModel.currentUser?.role;
-        final screen = role == 'cha'
-            ? const ParentMainScreen()
-            : const ChildMainScreen();
+    final role = authVM.currentUser?.role;
 
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => screen),
-        );
-      }
-    }
+    final nextScreen = role == "cha"
+        ? ParentMainScreen(
+      children: authVM.children,
+      locationRepository: LocationRepositoryImpl(),
+    )
+        : const ChildMainScreen();
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => nextScreen),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
       body: Center(child: CircularProgressIndicator()),
-    );
-  }
-}
-
-class ParentMainScreen extends StatelessWidget {
-  const ParentMainScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Dashboard Cha/Mẹ')),
-      body: Consumer<AuthViewModel>(
-        builder: (context, viewModel, _) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('Xin chào ${viewModel.currentUser?.name}'),
-                const SizedBox(height: 20),
-                Text('Số con: ${viewModel.children.length}'),
-                const SizedBox(height: 40),
-                ElevatedButton(
-                  onPressed: () async {
-                    await viewModel.logout();
-                    if (context.mounted) {
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (_) => const LoginScreen()),
-                      );
-                    }
-                  },
-                  child: const Text('Đăng xuất'),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
     );
   }
 }

@@ -1,8 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:quan_ly_cha_con/main.dart';
+import 'package:quan_ly_cha_con/repositories/location_repository.dart';
 import 'package:quan_ly_cha_con/ui/screens/child/ChildMainScreen.dart';
+import 'package:quan_ly_cha_con/ui/screens/parent/ParentMainScreen.dart';
 import 'package:quan_ly_cha_con/viewmodel/auth/auth_view_model.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -92,8 +93,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       if (viewModel.status == AuthStatus.success) {
                         if (mounted) {
                           final screen = _selectedRole == 'cha'
-                              ? const ParentMainScreen()
-                              : const ChildMainScreen();
+                              ? ParentMainScreen(
+                            children: viewModel.children,
+                            locationRepository: LocationRepositoryImpl(),
+                          )
+                      : const ChildMainScreen();
                           Navigator.of(context).pushReplacement(
                             MaterialPageRoute(builder: (_) => screen),
                           );
