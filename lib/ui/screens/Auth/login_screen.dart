@@ -1,9 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:quan_ly_cha_con/main.dart';
+import 'package:quan_ly_cha_con/repositories/location_repository.dart';
 import 'package:quan_ly_cha_con/ui/screens/Auth/register_screen.dart';
 import 'package:quan_ly_cha_con/ui/screens/child/ChildMainScreen.dart';
+import 'package:quan_ly_cha_con/ui/screens/parent/ParentMainScreen.dart';
 import 'package:quan_ly_cha_con/viewmodel/auth/auth_view_model.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -74,8 +75,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         if (mounted) {
                           final role = viewModel.currentUser?.role;
                           final screen = role == 'cha'
-                              ? const ParentMainScreen()
+                              ? ParentMainScreen(
+                            children: viewModel.children,
+                            locationRepository: LocationRepositoryImpl(),
+                          )
                               : const ChildMainScreen();
+
                           Navigator.of(context).pushReplacement(
                             MaterialPageRoute(builder: (_) => screen),
                           );

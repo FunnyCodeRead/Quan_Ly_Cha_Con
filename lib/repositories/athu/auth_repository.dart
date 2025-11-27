@@ -1,6 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:firebase_database/firebase_database.dart';
-import 'package:quan_ly_cha_con/models/User.dart';
+import 'package:quan_ly_cha_con/models/user.dart';
 
 abstract class AuthRepository {
   Future<User> register(String email, String password, String role);

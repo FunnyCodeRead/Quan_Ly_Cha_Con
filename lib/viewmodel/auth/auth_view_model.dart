@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:quan_ly_cha_con/models/User.dart';
+import 'package:quan_ly_cha_con/models/user.dart';
 import 'package:quan_ly_cha_con/repositories/athu/auth_repository.dart';
 import 'package:quan_ly_cha_con/services/auth/session_manager.dart';
 
