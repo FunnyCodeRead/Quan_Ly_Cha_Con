@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart' as auth;
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:quan_ly_cha_con/models/user.dart';
 
@@ -26,6 +27,26 @@ abstract class AuthRepository {
 class AuthRepositoryImpl implements AuthRepository {
   final auth.FirebaseAuth _firebaseAuth = auth.FirebaseAuth.instance;
   final FirebaseDatabase _database = FirebaseDatabase.instance;
+  auth.FirebaseAuth? _secondaryAuth;
+
+  Future<auth.FirebaseAuth> _getSecondaryAuth() async {
+    if (_secondaryAuth != null) return _secondaryAuth!;
+
+    final defaultApp = Firebase.app();
+    FirebaseApp secondaryApp;
+
+    try {
+      secondaryApp = Firebase.app('secondary');
+    } catch (_) {
+      secondaryApp = await Firebase.initializeApp(
+        name: 'secondary',
+        options: defaultApp.options,
+      );
+    }
+
+    _secondaryAuth = auth.FirebaseAuth.instanceFor(app: secondaryApp);
+    return _secondaryAuth!;
+  }
 
   @override
   Future<User> register(String email, String password, String role) async {
@@ -92,8 +113,9 @@ class AuthRepositoryImpl implements AuthRepository {
     required String parentId,
   }) async {
     try {
+      final secondaryAuth = await _getSecondaryAuth();
       final userCredential =
-      await _firebaseAuth.createUserWithEmailAndPassword(
+      await secondaryAuth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -111,8 +133,7 @@ class AuthRepositoryImpl implements AuthRepository {
       );
 
       await _database.ref('users/$childId').set(child.toJson());
-
-      await _firebaseAuth.signOut();
+      await secondaryAuth.signOut();
       return child;
     } catch (e) {
       throw Exception('Tạo tài khoản con thất bại: $e');
