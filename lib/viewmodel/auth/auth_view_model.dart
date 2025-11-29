@@ -12,6 +12,8 @@ class AuthViewModel extends ChangeNotifier {
   AuthStatus _status = AuthStatus.initial;
   User? _currentUser;
   List<User> _children = [];
+  User? _parentUser;
+
   String _errorMessage = '';
 
   AuthViewModel({
@@ -20,15 +22,22 @@ class AuthViewModel extends ChangeNotifier {
   })  : _authRepository = authRepository,
         _sessionManager = sessionManager;
 
-  // Getters
+  // ================= GETTERS =================
   AuthStatus get status => _status;
   User? get currentUser => _currentUser;
   List<User> get children => _children;
+  User? get parentUser => _parentUser;
+
   String get errorMessage => _errorMessage;
+
   bool get isLoggedIn => _currentUser != null;
   bool get isParent => _currentUser?.role == 'cha';
 
-  // ============ AUTH ============
+  /// ✅ CHA premium thì true, CON luôn false
+  bool get isPremiumParent =>
+      _currentUser?.role == 'cha' && (_currentUser?.isPremium ?? false);
+
+  // ================= AUTH =================
   Future<void> register({
     required String email,
     required String password,
@@ -46,7 +55,10 @@ class AuthViewModel extends ChangeNotifier {
       }
 
       final user = await _authRepository.register(email, password, role);
-      _currentUser = user;
+
+
+      _currentUser = user.copyWith(isPremium: user.isPremium);
+
       await _sessionManager.saveSession(
         userId: user.uid,
         email: user.email,
@@ -54,7 +66,12 @@ class AuthViewModel extends ChangeNotifier {
         userName: user.name,
       );
 
-      if (isParent) await _loadChildren();
+      if (isParent) {
+        await _loadChildren();
+      } else {
+        await loadParentForChild();
+      }
+
       _setStatus(AuthStatus.success);
     } catch (e) {
       _setError(e.toString());
@@ -74,7 +91,8 @@ class AuthViewModel extends ChangeNotifier {
       }
 
       final user = await _authRepository.login(email, password);
-      _currentUser = user;
+      _currentUser = user.copyWith(isPremium: user.isPremium);
+
       await _sessionManager.saveSession(
         userId: user.uid,
         email: user.email,
@@ -82,14 +100,64 @@ class AuthViewModel extends ChangeNotifier {
         userName: user.name,
       );
 
-      if (isParent) await _loadChildren();
+      if (isParent) {
+        await _loadChildren();
+      } else {
+        await loadParentForChild();
+      }
+
       _setStatus(AuthStatus.success);
     } catch (e) {
       _setError(e.toString());
     }
   }
 
-  // ============ CHILDREN ============
+  Future<void> loadUserFromStorage() async {
+    if (!_sessionManager.isLoggedIn) return;
+
+    _setStatus(AuthStatus.loading);
+    _errorMessage = '';
+
+    try {
+      final userId = _sessionManager.userId;
+      if (userId == null) throw Exception('Không tìm thấy user');
+
+      final user = await _authRepository.loadCurrentUser(userId);
+      if (user == null) {
+        _setStatus(AuthStatus.initial);
+        return;
+      }
+
+      _currentUser = user.copyWith(isPremium: user.isPremium);
+
+      if (isParent) {
+        await _loadChildren();
+      } else {
+        await loadParentForChild();
+      }
+
+      _setStatus(AuthStatus.success);
+    } catch (e) {
+      _setError(e.toString());
+    }
+  }
+
+  Future<void> logout() async {
+    try {
+      await _authRepository.logout();
+      await _sessionManager.clearSession();
+
+      _currentUser = null;
+      _children = [];
+      _parentUser = null;
+
+      _setStatus(AuthStatus.initial);
+    } catch (e) {
+      _setError(e.toString());
+    }
+  }
+
+  // ================= CHILDREN =================
   Future<void> createChildAccount({
     required String name,
     required String email,
@@ -122,50 +190,51 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   Future<void> _loadChildren() async {
-    try {
-      final parentId = _currentUser?.uid;
-      if (parentId == null) return;
+    final parentId = _currentUser?.uid;
+    if (parentId == null) return;
 
+    try {
       _children = await _authRepository.loadChildrenForParent(parentId);
       notifyListeners();
     } catch (e) {
-      print('Lỗi tải con: $e');
+      debugPrint('Lỗi tải con: $e');
     }
   }
 
-  // ============ HELPERS ============
-  Future<void> loadUserFromStorage() async {
-    if (!_sessionManager.isLoggedIn) return;
+  // ================= PARENT FOR CHILD =================
+  Future<void> loadParentForChild() async {
+    try {
+      if (_currentUser == null) return;
+      if (_currentUser!.role != 'con') return;
+
+      final parentId = _currentUser!.parentId;
+      if (parentId == null || parentId.isEmpty) return;
+
+      _parentUser = await _authRepository.loadUserById(parentId);
+      notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
+    }
+  }
+
+  // ================= PREMIUM =================
+  Future<void> upgradePremium() async {
+    final me = _currentUser;
+    if (me == null || me.role != 'cha') return;
 
     _setStatus(AuthStatus.loading);
 
     try {
-      final userId = _sessionManager.userId;
-      if (userId == null) throw Exception('Không tìm thấy user');
+      await _authRepository.upgradeToPremium(me.uid);
 
-      final user = await _authRepository.loadCurrentUser(userId);
-      if (user != null) {
-        _currentUser = user;
-        if (isParent) await _loadChildren();
-        _setStatus(AuthStatus.success);
-      }
+      _currentUser = me.copyWith(isPremium: true);
+      _setStatus(AuthStatus.success);
     } catch (e) {
       _setError(e.toString());
     }
   }
 
-  Future<void> logout() async {
-    try {
-      await _authRepository.logout();
-      await _sessionManager.clearSession();
-      _currentUser = null;
-      _children = [];
-      _setStatus(AuthStatus.initial);
-    } catch (e) {
-      _setError(e.toString());
-    }
-  }
-
+  // ================= HELPERS =================
   void clearError() {
     _errorMessage = '';
     notifyListeners();

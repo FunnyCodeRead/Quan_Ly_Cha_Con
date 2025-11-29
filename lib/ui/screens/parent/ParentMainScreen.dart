@@ -59,10 +59,24 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
         onSelectChild: (child) {
           setState(() {
             _selectedChild = child;
-            _selectedIndex = 2;
+            _selectedIndex = 2; // tab map
           });
         },
+        onChatChild: (child) {
+          // C1: nếu dùng routes
+          Navigator.pushNamed(
+            context,
+            '/chat',
+            arguments: child, // truyền thông tin con sang màn chat
+          );
+
+          // C2: nếu dùng MaterialPageRoute
+          // Navigator.of(context).push(
+          //   MaterialPageRoute(builder: (_) => ChatScreen(child: child)),
+          // );
+        },
       ),
+
 
       // Tab Theo dõi: multi children map
       ChangeNotifierProvider.value(

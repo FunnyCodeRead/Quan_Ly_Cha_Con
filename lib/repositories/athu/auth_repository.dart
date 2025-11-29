@@ -5,15 +5,20 @@ import 'package:quan_ly_cha_con/models/user.dart';
 abstract class AuthRepository {
   Future<User> register(String email, String password, String role);
   Future<User> login(String email, String password);
+  Future<User?> loadUserById(String uid);
   Future<User> createChildAccount({
     required String name,
     required String email,
     required String password,
     required String parentId,
   });
+
   Future<List<User>> loadChildrenForParent(String parentId);
   Future<User?> loadCurrentUser(String uid);
   Future<void> logout();
+
+  /// ✅ nâng cấp premium cho CHA
+  Future<void> upgradeToPremium(String parentUid);
 }
 
 class AuthRepositoryImpl implements AuthRepository {
@@ -23,7 +28,8 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<User> register(String email, String password, String role) async {
     try {
-      final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
+      final userCredential =
+      await _firebaseAuth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -36,6 +42,7 @@ class AuthRepositoryImpl implements AuthRepository {
         email: email,
         role: role,
         name: '',
+        isPremium: false, // ✅ default
       );
 
       await _database.ref('users/$uid').set(user.toJson());
@@ -63,7 +70,18 @@ class AuthRepositoryImpl implements AuthRepository {
       throw Exception('Đăng nhập thất bại: $e');
     }
   }
+  @override
+  Future<User?> loadUserById(String uid) async {
+    try {
+      final snapshot = await _database.ref('users/$uid').get();
+      if (!snapshot.exists) return null;
 
+      final json = Map<String, dynamic>.from(snapshot.value as Map);
+      return User.fromJson(json);
+    } catch (e) {
+      throw Exception('Lỗi load user theo id: $e');
+    }
+  }
   @override
   Future<User> createChildAccount({
     required String name,
@@ -72,8 +90,8 @@ class AuthRepositoryImpl implements AuthRepository {
     required String parentId,
   }) async {
     try {
-      // Tạo tài khoản con mà không logout tài khoản cha
-      final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
+      final userCredential =
+      await _firebaseAuth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -87,15 +105,12 @@ class AuthRepositoryImpl implements AuthRepository {
         role: 'con',
         name: name,
         parentId: parentId,
+        isPremium: false, // ✅ con không cần premium
       );
 
       await _database.ref('users/$childId').set(child.toJson());
 
-      // Logout con, giữ cha đăng nhập
       await _firebaseAuth.signOut();
-
-      // Re-login với tài khoản cha
-      // (nên gọi từ ViewModel để refresh)
       return child;
     } catch (e) {
       throw Exception('Tạo tài khoản con thất bại: $e');
@@ -134,6 +149,17 @@ class AuthRepositoryImpl implements AuthRepository {
       return User.fromJson(json);
     } catch (e) {
       throw Exception('Lỗi tải user: $e');
+    }
+  }
+
+  @override
+  Future<void> upgradeToPremium(String parentUid) async {
+    try {
+      await _database.ref('users/$parentUid').update({
+        'isPremium': true,
+      });
+    } catch (e) {
+      throw Exception("Nâng cấp premium thất bại: $e");
     }
   }
 
