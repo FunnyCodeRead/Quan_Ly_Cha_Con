@@ -15,6 +15,8 @@ import 'package:quan_ly_cha_con/viewmodel/auth/auth_view_model.dart';
 import 'package:quan_ly_cha_con/viewmodel/parent/parent_location_view_model.dart';
 import 'package:quan_ly_cha_con/viewmodel/children/child_location_view_model.dart';
 
+import 'package:quan_ly_cha_con/repositories/chat/chat_repository.dart';
+import 'package:quan_ly_cha_con/viewmodel/chat/chat_view_model.dart';
 
 import 'firebase_options.dart';
 
@@ -36,23 +38,31 @@ class MyApp extends StatelessWidget {
       providers: [
         Provider<SessionManager>(create: (_) => sessionManager),
 
-        ChangeNotifierProvider(
+        ChangeNotifierProvider<AuthViewModel>(
           create: (_) => AuthViewModel(
             authRepository: AuthRepositoryImpl(),
             sessionManager: sessionManager,
           ),
         ),
 
-        ChangeNotifierProvider(
+        ChangeNotifierProvider<ParentLocationViewModel>(
           create: (_) => ParentLocationViewModel(LocationRepositoryImpl()),
         ),
 
-
-        ChangeNotifierProvider(
+        ChangeNotifierProvider<ChildLocationViewModel>(
           create: (_) => ChildLocationViewModel(
             LocationRepositoryImpl(),
             LocationServiceImpl(),
           ),
+        ),
+
+        // ✅ CHAT PROVIDERS (repo trước, vm sau)
+        Provider<ChatRepository>(
+          create: (_) => ChatRepositoryImpl(),
+        ),
+        ChangeNotifierProvider<ChatViewModel>(
+          create: (context) =>
+              ChatViewModel(context.read<ChatRepository>()),
         ),
       ],
       child: MaterialApp(

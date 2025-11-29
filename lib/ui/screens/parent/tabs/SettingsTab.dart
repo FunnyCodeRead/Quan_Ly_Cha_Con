@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:quan_ly_cha_con/ui/widgets/logout_action.dart';
+import 'package:quan_ly_cha_con/viewmodel/auth/auth_view_model.dart';
+import 'package:quan_ly_cha_con/routes/app_routes.dart';
 
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -85,86 +88,13 @@ class _SettingsTabState extends State<SettingsTab> {
 
   @override
   Widget build(BuildContext context) {
+    final authVM = context.watch<AuthViewModel>();
+    final isParent = authVM.isParent;
+    final isPremium = authVM.isPremiumParent;
+
     return SafeArea(
       child: ListView(
         children: [
-          // ===== Support =====
-          _sectionTitle("Support"),
-          _tile(
-            icon: Icons.menu_book_outlined,
-            title: "User Guide",
-            onTap: () {},
-          ),
-          _tile(
-            icon: Icons.headset_mic_outlined,
-            title: "Help Desk Support",
-            onTap: () {},
-          ),
-          _tile(
-            icon: Icons.lock_outline,
-            title: "Change Password",
-            onTap: () {},
-          ),
-          _tile(
-            icon: Icons.contact_page_outlined,
-            title: "Contact Information",
-            onTap: () {},
-          ),
-
-          _divider(),
-
-          // ===== Defaults =====
-          _sectionTitle("Defaults"),
-          _tile(
-            icon: Icons.mic_none_outlined,
-            title: "Recording Screen",
-            trailingText: "Template",
-            onTap: () {},
-          ),
-          _tile(
-            icon: Icons.description_outlined,
-            title: "Document Type",
-            trailingText: "Prompt on Upload",
-            onTap: () {},
-          ),
-          _tile(
-            icon: Icons.location_on_outlined,
-            title: "Location",
-            trailingText: "Prompt on Upload",
-            onTap: () {},
-          ),
-          _tile(
-            icon: Icons.volume_off_outlined,
-            title: "Silence Detection",
-            trailingText: "30 Seconds",
-            onTap: () {},
-          ),
-          _tile(
-            icon: Icons.tune_outlined,
-            title: "Custom Encounter Field",
-            trailingText: "None",
-            onTap: () {},
-          ),
-
-          _divider(),
-
-          // ===== Favorites =====
-          _sectionTitle("Favorites"),
-          _tile(
-            icon: Icons.description_outlined,
-            title: "Document Types",
-            trailingText: "All",
-            onTap: () {},
-          ),
-          _tile(
-            icon: Icons.location_on_outlined,
-            title: "Locations",
-            trailingText: "All",
-            onTap: () {},
-          ),
-
-          _divider(),
-
           // ===== Confirmations =====
           _sectionTitle("Confirmations"),
           ListTile(
@@ -184,8 +114,22 @@ class _SettingsTabState extends State<SettingsTab> {
 
           _divider(),
 
-          // ===== Logout tile (dùng chung logic) =====
+          // ===== Account =====
           _sectionTitle("Account"),
+
+          // ✅ Premium tile (chỉ CHA thấy)
+          if (isParent) ...[
+            _tile(
+              icon: Icons.workspace_premium,
+              title: isPremium ? "Premium: Đang hoạt động" : "Nâng cấp Premium",
+              subtitle: "Mở khóa E2EE & chat không giới hạn",
+              trailingText: isPremium ? "ON" : null,
+              onTap: () => Navigator.pushNamed(context, AppRoutes.premium),
+            ),
+            _divider(),
+          ],
+
+          // ===== Logout tile (dùng chung logic) =====
           _tile(
             icon: Icons.logout,
             title: "Đăng xuất",

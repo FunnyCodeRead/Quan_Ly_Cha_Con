@@ -5,15 +5,18 @@ class User {
   final String name;
   final String? parentId;
 
+
+  final bool isPremium;
+
   User({
     this.uid = '',
     this.email = '',
     this.role = '',
     this.name = '',
     this.parentId,
+    this.isPremium = false,
   });
 
-  // Convert to JSON
   Map<String, dynamic> toJson() {
     return {
       'uid': uid,
@@ -21,10 +24,10 @@ class User {
       'role': role,
       'name': name,
       'parentId': parentId,
+      'isPremium': isPremium,
     };
   }
 
-  // Create from JSON
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       uid: json['uid'] as String? ?? '',
@@ -32,16 +35,17 @@ class User {
       role: json['role'] as String? ?? '',
       name: json['name'] as String? ?? '',
       parentId: json['parentId'] as String?,
+      isPremium: json['isPremium'] as bool? ?? false,
     );
   }
 
-  // Copy with method
   User copyWith({
     String? uid,
     String? email,
     String? role,
     String? name,
     String? parentId,
+    bool? isPremium,
   }) {
     return User(
       uid: uid ?? this.uid,
@@ -49,11 +53,13 @@ class User {
       role: role ?? this.role,
       name: name ?? this.name,
       parentId: parentId ?? this.parentId,
+      isPremium: isPremium ?? this.isPremium,
     );
   }
 
   @override
-  String toString() => 'User(uid: $uid, email: $email, role: $role, name: $name, parentId: $parentId)';
+  String toString() =>
+      'User(uid: $uid, email: $email, role: $role, name: $name, parentId: $parentId, isPremium: $isPremium)';
 
   @override
   bool operator ==(Object other) =>
@@ -64,7 +70,8 @@ class User {
               email == other.email &&
               role == other.role &&
               name == other.name &&
-              parentId == other.parentId;
+              parentId == other.parentId &&
+              isPremium == other.isPremium;
 
   @override
   int get hashCode =>
@@ -72,5 +79,6 @@ class User {
       email.hashCode ^
       role.hashCode ^
       name.hashCode ^
-      parentId.hashCode;
+      parentId.hashCode ^
+      isPremium.hashCode;
 }
