@@ -31,6 +31,7 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
 
   late final ParentLocationViewModel _locationViewModel;
   late final AuthViewModel _authViewModel;
+  String? _lastAction;
 
   @override
   void initState() {
@@ -38,6 +39,7 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
     _authViewModel = context.read<AuthViewModel>();
     _locationViewModel = ParentLocationViewModel(widget.locationRepository);
 
+    _authViewModel.addListener(_handleAuthChange);
     _authViewModel.addListener(_handleChildrenChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ids = _authViewModel.children.map((c) => c.uid).toList();
@@ -47,17 +49,38 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
 
   @override
   void dispose() {
+    _authViewModel.removeListener(_handleAuthChange);
     _authViewModel.removeListener(_handleChildrenChange);
     _locationViewModel.dispose();
     super.dispose();
   }
 
+  void _handleAuthChange() {
   void _handleChildrenChange() {
     final ids = _authViewModel.children.map((c) => c.uid).toList();
     _locationViewModel.watchAllChildren(ids);
     if (_selectedChild != null && !ids.contains(_selectedChild!.uid)) {
       _selectedChild = null;
     }
+
+    if (!mounted) return;
+
+    final status = _authViewModel.status;
+    if (status == AuthStatus.error && _authViewModel.errorMessage.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_authViewModel.errorMessage)),
+      );
+      _lastAction = null;
+    } else if (status == AuthStatus.success && _lastAction != null) {
+      final successText = _lastAction == 'create'
+          ? 'Tạo tài khoản con thành công'
+          : 'Đã xóa tài khoản con';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(successText)),
+      );
+      _lastAction = null;
+    }
+
     setState(() {});
   }
 
@@ -69,6 +92,7 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
     await showDialog(
       context: context,
       builder: (context) {
+        final authVM = context.watch<AuthViewModel>();
         return AlertDialog(
           title: const Text('Tạo tài khoản con'),
           content: Column(
@@ -95,6 +119,19 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
               child: const Text('Hủy'),
             ),
             ElevatedButton(
+              onPressed: authVM.status == AuthStatus.loading
+                  ? null
+                  : () async {
+                      _lastAction = 'create';
+                      await _authViewModel.createChildAccount(
+                        name: nameController.text,
+                        email: emailController.text,
+                        password: passwordController.text,
+                      );
+                      if (mounted && _authViewModel.status == AuthStatus.success) {
+                        Navigator.of(context).pop();
+                      }
+                    },
               onPressed: () async {
                 await _authViewModel.createChildAccount(
                   name: nameController.text,
@@ -137,12 +174,16 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
     );
 
     if (confirmed == true) {
+      _lastAction = 'delete';
       await _authViewModel.deleteChild(child.uid);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final authVM = context.watch<AuthViewModel>();
+    final children = authVM.children;
+    final isBusy = authVM.status == AuthStatus.loading;
     final children = context.watch<AuthViewModel>().children;
     final screens = [
       const HomeTab(),
@@ -156,6 +197,8 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
             _selectedIndex = 2; // tab map
           });
         },
+        onCreateChild: isBusy ? null : _showCreateChildDialog,
+        onDeleteChild: isBusy ? null : _confirmDeleteChild,
         onCreateChild: _showCreateChildDialog,
         onDeleteChild: _confirmDeleteChild,
         onChatChild: (child) {
@@ -188,7 +231,18 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Dashboard Cha/Mẹ')),
-      body: screens[_selectedIndex],
+      body: Stack(
+        children: [
+          screens[_selectedIndex],
+          if (isBusy)
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: LinearProgressIndicator(),
+            ),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.blue,
