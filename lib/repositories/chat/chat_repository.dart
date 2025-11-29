@@ -164,9 +164,11 @@ class ChatRepositoryImpl implements ChatRepository {
     final security = await getChatSecurityLevel(chatId);
     final hasPremiumParent = await chatHasPremiumParent(chatId);
     final hasPremiumAccess = meIsPremium || hasPremiumParent || security == 'e2ee';
+    var effectiveSecurity = security;
 
     if (hasPremiumAccess && security != 'e2ee') {
       await chatRef.set({'securityLevel': 'e2ee'}, SetOptions(merge: true));
+      effectiveSecurity = 'e2ee';
     }
 
     if (!hasPremiumAccess && security == 'free') {
@@ -192,10 +194,9 @@ class ChatRepositoryImpl implements ChatRepository {
     });
 
     await chatRef.set({
-      'lastMessage': (meIsPremium || security == 'e2ee')
-          ? "(tin nhắn mã hoá)"
-          : msg.text,
+      'lastMessage': hasPremiumAccess ? "(tin nhắn mã hoá)" : msg.text,
       'lastTimestamp': FieldValue.serverTimestamp(),
+      'securityLevel': effectiveSecurity,
     }, SetOptions(merge: true));
   }
 
