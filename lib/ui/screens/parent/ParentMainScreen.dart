@@ -40,6 +40,7 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
     _locationViewModel = ParentLocationViewModel(widget.locationRepository);
 
     _authViewModel.addListener(_handleAuthChange);
+    _authViewModel.addListener(_handleChildrenChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ids = _authViewModel.children.map((c) => c.uid).toList();
       _locationViewModel.watchAllChildren(ids);
@@ -49,11 +50,13 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
   @override
   void dispose() {
     _authViewModel.removeListener(_handleAuthChange);
+    _authViewModel.removeListener(_handleChildrenChange);
     _locationViewModel.dispose();
     super.dispose();
   }
 
   void _handleAuthChange() {
+  void _handleChildrenChange() {
     final ids = _authViewModel.children.map((c) => c.uid).toList();
     _locationViewModel.watchAllChildren(ids);
     if (_selectedChild != null && !ids.contains(_selectedChild!.uid)) {
@@ -129,6 +132,16 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
                         Navigator.of(context).pop();
                       }
                     },
+              onPressed: () async {
+                await _authViewModel.createChildAccount(
+                  name: nameController.text,
+                  email: emailController.text,
+                  password: passwordController.text,
+                );
+                if (mounted && _authViewModel.status == AuthStatus.success) {
+                  Navigator.of(context).pop();
+                }
+              },
               child: const Text('Tạo'),
             ),
           ],
@@ -171,6 +184,7 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
     final authVM = context.watch<AuthViewModel>();
     final children = authVM.children;
     final isBusy = authVM.status == AuthStatus.loading;
+    final children = context.watch<AuthViewModel>().children;
     final screens = [
       const HomeTab(),
 
@@ -185,6 +199,8 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
         },
         onCreateChild: isBusy ? null : _showCreateChildDialog,
         onDeleteChild: isBusy ? null : _confirmDeleteChild,
+        onCreateChild: _showCreateChildDialog,
+        onDeleteChild: _confirmDeleteChild,
         onChatChild: (child) {
           // C1: nếu dùng routes
           Navigator.pushNamed(
