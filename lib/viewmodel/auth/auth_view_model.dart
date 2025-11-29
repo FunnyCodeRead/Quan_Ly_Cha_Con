@@ -37,6 +37,10 @@ class AuthViewModel extends ChangeNotifier {
   bool get isPremiumParent =>
       _currentUser?.role == 'cha' && (_currentUser?.isPremium ?? false);
 
+  /// Quyền premium chia sẻ cho cả cha và con (nếu cha đã nâng cấp)
+  bool get hasSharedPremium =>
+      (_currentUser?.isPremium ?? false) || (_parentUser?.isPremium ?? false);
+
   // ================= AUTH =================
   Future<void> register({
     required String email,
