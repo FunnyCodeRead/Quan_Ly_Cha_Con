@@ -193,6 +193,18 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
+  Future<void> deleteChild(String childId) async {
+    _setStatus(AuthStatus.loading);
+
+    try {
+      await _authRepository.deleteChild(childId);
+      _children.removeWhere((c) => c.uid == childId);
+      _setStatus(AuthStatus.success);
+    } catch (e) {
+      _setError(e.toString());
+    }
+  }
+
   Future<void> _loadChildren() async {
     final parentId = _currentUser?.uid;
     if (parentId == null) return;

@@ -13,6 +13,8 @@ abstract class AuthRepository {
     required String parentId,
   });
 
+  Future<void> deleteChild(String childId);
+
   Future<List<User>> loadChildrenForParent(String parentId);
   Future<User?> loadCurrentUser(String uid);
   Future<void> logout();
@@ -114,6 +116,16 @@ class AuthRepositoryImpl implements AuthRepository {
       return child;
     } catch (e) {
       throw Exception('Tạo tài khoản con thất bại: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteChild(String childId) async {
+    try {
+      await _database.ref('users/$childId').remove();
+      await _database.ref('locations/$childId').remove();
+    } catch (e) {
+      throw Exception('Xóa tài khoản con thất bại: $e');
     }
   }
 
