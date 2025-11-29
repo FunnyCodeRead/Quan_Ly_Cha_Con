@@ -37,6 +37,10 @@ class AuthViewModel extends ChangeNotifier {
   bool get isPremiumParent =>
       _currentUser?.role == 'cha' && (_currentUser?.isPremium ?? false);
 
+  /// Quyền premium chia sẻ cho cả cha và con (nếu cha đã nâng cấp)
+  bool get hasSharedPremium =>
+      (_currentUser?.isPremium ?? false) || (_parentUser?.isPremium ?? false);
+
   // ================= AUTH =================
   Future<void> register({
     required String email,
@@ -183,6 +187,18 @@ class AuthViewModel extends ChangeNotifier {
       );
 
       _children.add(child);
+      _setStatus(AuthStatus.success);
+    } catch (e) {
+      _setError(e.toString());
+    }
+  }
+
+  Future<void> deleteChild(String childId) async {
+    _setStatus(AuthStatus.loading);
+
+    try {
+      await _authRepository.deleteChild(childId);
+      _children.removeWhere((c) => c.uid == childId);
       _setStatus(AuthStatus.success);
     } catch (e) {
       _setError(e.toString());
