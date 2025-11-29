@@ -40,7 +40,32 @@ class ChatRepositoryImpl implements ChatRepository {
     }
 
     try {
-      await chatRef.create({
+      final existing = await chatRef.get();
+
+      if (existing.exists) {
+        final data = existing.data();
+        final existingParticipants =
+            (data?['participants'] as List?)?.map((e) => e.toString()).toList();
+
+        // Nếu server đã có participants khác, không thể tự ý đổi vì rules cấm.
+        if (existingParticipants != null &&
+            (existingParticipants.length != uniqueParticipants.length ||
+                !Set.of(existingParticipants).containsAll(uniqueParticipants))) {
+          throw Exception(
+              'Không thể tham gia cuộc chat vì danh sách participant không khớp');
+        }
+        return; // Chat đã có và hợp lệ.
+      }
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') {
+        // Không đọc được doc, thử tạo mới trực tiếp (tôn trọng rules create).
+      } else {
+        rethrow;
+      }
+    }
+
+    try {
+      await chatRef.set({
         'participants': uniqueParticipants,
         'createdAt': FieldValue.serverTimestamp(),
         'lastMessage': '',
@@ -48,36 +73,15 @@ class ChatRepositoryImpl implements ChatRepository {
         'securityLevel': 'free', // free | e2ee
       });
     } on FirebaseException catch (e) {
-      if (e.code == 'already-exists') {
-        // Chat đã có sẵn: ghép participant theo thứ tự ổn định để phù hợp rules.
-        await _mergeParticipantsIfAllowed(chatRef, uniqueParticipants);
-        return;
-      }
-
+      // Nếu không đủ quyền create/update thì báo lỗi để UI biết thay vì nuốt lỗi.
       if (e.code == 'permission-denied') {
-        // Có thể chat đã tồn tại nhưng đọc bị chặn; thử merge nhẹ nếu server cho phép.
-        await _mergeParticipantsIfAllowed(chatRef, uniqueParticipants, swallowPermission: true);
-        return;
+        throw Exception('Không có quyền tạo cuộc chat (permission-denied)');
       }
 
-      rethrow;
-    }
-  }
-
-  Future<void> _mergeParticipantsIfAllowed(
-    DocumentReference<Map<String, dynamic>> chatRef,
-    List<String> participants, {
-    bool swallowPermission = false,
-  }) async {
-    try {
-      await chatRef.set({
-        'participants': participants,
-        'securityLevel': 'free',
-      }, SetOptions(merge: true));
-    } on FirebaseException catch (e) {
-      if (e.code == 'permission-denied' && swallowPermission) {
-        return; // Không thể sửa nhưng cũng không cần crash UI.
+      if (e.code == 'already-exists') {
+        return; // Một client khác vừa tạo xong, coi như thành công.
       }
+
       rethrow;
     }
   }
