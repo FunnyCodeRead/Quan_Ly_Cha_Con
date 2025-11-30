@@ -12,12 +12,10 @@ import 'tabs/SettingsTab.dart';
 import 'tabs/parent_all_children_map_screen.dart';
 
 class ParentMainScreen extends StatefulWidget {
-  final List<User> children;
   final LocationRepository locationRepository;
 
   const ParentMainScreen({
     Key? key,
-    required this.children,
     required this.locationRepository,
   }) : super(key: key);
 
@@ -31,15 +29,18 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
 
   late final ParentLocationViewModel _locationViewModel;
   late final AuthViewModel _authViewModel;
-  String? _lastAction;
+
+  String? _lastAction; // "create" | "delete"
 
   @override
   void initState() {
     super.initState();
+
     _authViewModel = context.read<AuthViewModel>();
     _locationViewModel = ParentLocationViewModel(widget.locationRepository);
 
     _authViewModel.addListener(_handleAuthChange);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ids = _authViewModel.children.map((c) => c.uid).toList();
       _locationViewModel.watchAllChildren(ids);
@@ -53,9 +54,11 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
     super.dispose();
   }
 
+  // ✅ 1 listener đủ hết: update map + snackbars
   void _handleAuthChange() {
     final ids = _authViewModel.children.map((c) => c.uid).toList();
     _locationViewModel.watchAllChildren(ids);
+
     if (_selectedChild != null && !ids.contains(_selectedChild!.uid)) {
       _selectedChild = null;
     }
@@ -63,7 +66,9 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
     if (!mounted) return;
 
     final status = _authViewModel.status;
-    if (status == AuthStatus.error && _authViewModel.errorMessage.isNotEmpty) {
+
+    if (status == AuthStatus.error &&
+        _authViewModel.errorMessage.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(_authViewModel.errorMessage)),
       );
@@ -88,8 +93,10 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
 
     await showDialog(
       context: context,
-      builder: (context) {
+      builder: (_) {
         final authVM = context.watch<AuthViewModel>();
+        final isBusy = authVM.status == AuthStatus.loading;
+
         return AlertDialog(
           title: const Text('Tạo tài khoản con'),
           content: Column(
@@ -112,21 +119,23 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: isBusy ? null : () => Navigator.pop(context),
               child: const Text('Hủy'),
             ),
             ElevatedButton(
-              onPressed: authVM.status == AuthStatus.loading
+              onPressed: isBusy
                   ? null
                   : () async {
                       _lastAction = 'create';
                       await _authViewModel.createChildAccount(
-                        name: nameController.text,
-                        email: emailController.text,
-                        password: passwordController.text,
+                        name: nameController.text.trim(),
+                        email: emailController.text.trim(),
+                        password: passwordController.text.trim(),
                       );
-                      if (mounted && _authViewModel.status == AuthStatus.success) {
-                        Navigator.of(context).pop();
+
+                      if (mounted &&
+                          _authViewModel.status == AuthStatus.success) {
+                        Navigator.pop(context);
                       }
                     },
               child: const Text('Tạo'),
@@ -140,16 +149,18 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
   Future<void> _confirmDeleteChild(User child) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (_) => AlertDialog(
         title: const Text('Xóa tài khoản con'),
-        content: Text('Bạn có chắc muốn xóa ${child.name.isEmpty ? child.email : child.name}?'),
+        content: Text(
+          'Bạn có chắc muốn xóa ${child.name.isEmpty ? child.email : child.name}?',
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Hủy'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.redAccent,
               foregroundColor: Colors.white,
@@ -171,42 +182,30 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
     final authVM = context.watch<AuthViewModel>();
     final children = authVM.children;
     final isBusy = authVM.status == AuthStatus.loading;
+
     final screens = [
       const HomeTab(),
 
-      // Tab Con cái: bấm con nào -> focus con đó
       ChildrenTab(
         children: children,
         onSelectChild: (child) {
           setState(() {
             _selectedChild = child;
-            _selectedIndex = 2; // tab map
+            _selectedIndex = 2;
           });
         },
         onCreateChild: isBusy ? null : _showCreateChildDialog,
         onDeleteChild: isBusy ? null : _confirmDeleteChild,
         onChatChild: (child) {
-          // C1: nếu dùng routes
-          Navigator.pushNamed(
-            context,
-            '/chat',
-            arguments: child, // truyền thông tin con sang màn chat
-          );
-
-          // C2: nếu dùng MaterialPageRoute
-          // Navigator.of(context).push(
-          //   MaterialPageRoute(builder: (_) => ChatScreen(child: child)),
-          // );
+          Navigator.pushNamed(context, '/chat', arguments: child);
         },
       ),
 
-
-      // Tab Theo dõi: multi children map
       ChangeNotifierProvider.value(
         value: _locationViewModel,
         child: ParentAllChildrenMapScreen(
           children: children,
-          focusChildId: _selectedChild?.uid, // focus nếu có chọn
+          focusChildId: _selectedChild?.uid,
         ),
       ),
 
@@ -235,7 +234,7 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
         onTap: (index) {
           setState(() {
             _selectedIndex = index;
-            if (index != 2) _selectedChild = null; // rời tab map thì bỏ focus
+            if (index != 2) _selectedChild = null;
           });
         },
         items: const [

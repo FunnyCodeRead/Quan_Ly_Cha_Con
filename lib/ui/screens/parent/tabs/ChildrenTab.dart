@@ -11,10 +11,10 @@ class ChildrenTab extends StatelessWidget {
   /// Bấm icon chat (mở chat 1-1)
   final void Function(User child) onChatChild;
 
-  /// Tạo tài khoản con mới
+  /// Tạo tài khoản con mới (có thể null để disable)
   final VoidCallback? onCreateChild;
 
-  /// Xóa một con
+  /// Xóa một con (có thể null để disable)
   final void Function(User child)? onDeleteChild;
 
   const ChildrenTab({
@@ -22,8 +22,8 @@ class ChildrenTab extends StatelessWidget {
     required this.children,
     required this.onSelectChild,
     required this.onChatChild,
-    required this.onCreateChild,
-    required this.onDeleteChild,
+    this.onCreateChild,
+    this.onDeleteChild,
   }) : super(key: key);
 
   @override
@@ -37,7 +37,7 @@ class ChildrenTab extends StatelessWidget {
             child: ElevatedButton.icon(
               icon: const Icon(Icons.person_add_alt_1),
               label: const Text('Tạo tài khoản con mới'),
-              onPressed: onCreateChild,
+              onPressed: onCreateChild, // null => tự disable
             ),
           ),
         ),
@@ -62,23 +62,29 @@ class ChildrenTab extends StatelessWidget {
                           child: Icon(Icons.person),
                         ),
                         title: Text(
-                            child.name.isNotEmpty ? child.name : "Con ${index + 1}"),
+                          child.name.isNotEmpty
+                              ? child.name
+                              : "Con ${index + 1}",
+                        ),
                         subtitle: Text('Email: ${child.email}'),
 
-                        // 👇 trailing có 3 nút: chat + delete + mũi tên
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
                               tooltip: 'Chat với con',
-                              icon: const Icon(Icons.chat_bubble_outline,
-                                  color: Colors.blue),
+                              icon: const Icon(
+                                Icons.chat_bubble_outline,
+                                color: Colors.blue,
+                              ),
                               onPressed: () => onChatChild(child),
                             ),
                             IconButton(
                               tooltip: 'Xóa tài khoản con',
-                              icon: const Icon(Icons.delete_outline,
-                                  color: Colors.redAccent),
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.redAccent,
+                              ),
                               onPressed: onDeleteChild == null
                                   ? null
                                   : () => onDeleteChild!(child),
