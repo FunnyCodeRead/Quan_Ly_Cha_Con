@@ -15,6 +15,11 @@ class AuthViewModel extends ChangeNotifier {
   User? _parentUser;
 
   String _errorMessage = '';
+  String _resetMessage = '';
+  String _resetErrorMessage = '';
+  AuthStatus _resetStatus = AuthStatus.initial;
+
+  String _lastResetEmail = '';
 
   AuthViewModel({
     required AuthRepository authRepository,
@@ -29,6 +34,8 @@ class AuthViewModel extends ChangeNotifier {
   User? get parentUser => _parentUser;
 
   String get errorMessage => _errorMessage;
+  String get resetMessage => _resetMessage;
+  String get resetErrorMessage => _resetErrorMessage;
 
   bool get isLoggedIn => _currentUser != null;
   bool get isParent => _currentUser?.role == 'cha';
@@ -36,6 +43,13 @@ class AuthViewModel extends ChangeNotifier {
   /// ✅ CHA premium thì true, CON luôn false
   bool get isPremiumParent =>
       _currentUser?.role == 'cha' && (_currentUser?.isPremium ?? false);
+
+  /// Quyền premium chia sẻ cho cả cha và con (nếu cha đã nâng cấp)
+  bool get hasSharedPremium =>
+      (_currentUser?.isPremium ?? false) || (_parentUser?.isPremium ?? false);
+
+  AuthStatus get resetStatus => _resetStatus;
+  String get lastResetEmail => _lastResetEmail;
 
   // ================= AUTH =================
   Future<void> register({
@@ -157,6 +171,57 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
+  // ================= RESET PASSWORD =================
+  Future<void> sendResetOtp(String email) async {
+    _setResetStatus(AuthStatus.loading);
+    _resetErrorMessage = '';
+    _resetMessage = '';
+
+    try {
+      if (email.isEmpty) {
+        throw Exception('Vui lòng nhập email');
+      }
+
+      await _authRepository.sendPasswordResetOtp(email);
+      _lastResetEmail = email;
+      _resetMessage =
+          'Đã gửi mã OTP đặt lại mật khẩu tới email. Vui lòng kiểm tra hộp thư.';
+      _setResetStatus(AuthStatus.success);
+    } catch (e) {
+      _setResetError(e.toString());
+    }
+  }
+
+  Future<void> confirmPasswordReset({
+    required String otpCode,
+    required String newPassword,
+    String? email,
+  }) async {
+    _setResetStatus(AuthStatus.loading);
+    _resetErrorMessage = '';
+    _resetMessage = '';
+
+    try {
+      if (otpCode.isEmpty || newPassword.isEmpty) {
+        throw Exception('Vui lòng nhập đầy đủ mã OTP và mật khẩu mới');
+      }
+      if (newPassword.length < 6) {
+        throw Exception('Mật khẩu mới phải ít nhất 6 ký tự');
+      }
+
+      await _authRepository.confirmPasswordReset(
+        otpCode: otpCode,
+        newPassword: newPassword,
+      );
+
+      _resetMessage =
+          'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập với mật khẩu mới.';
+      _setResetStatus(AuthStatus.success);
+    } catch (e) {
+      _setResetError(e.toString());
+    }
+  }
+
   // ================= CHILDREN =================
   Future<void> createChildAccount({
     required String name,
@@ -183,6 +248,18 @@ class AuthViewModel extends ChangeNotifier {
       );
 
       _children.add(child);
+      _setStatus(AuthStatus.success);
+    } catch (e) {
+      _setError(e.toString());
+    }
+  }
+
+  Future<void> deleteChild(String childId) async {
+    _setStatus(AuthStatus.loading);
+
+    try {
+      await _authRepository.deleteChild(childId);
+      _children.removeWhere((c) => c.uid == childId);
       _setStatus(AuthStatus.success);
     } catch (e) {
       _setError(e.toString());
@@ -240,6 +317,13 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearResetState() {
+    _resetMessage = '';
+    _resetErrorMessage = '';
+    _resetStatus = AuthStatus.initial;
+    notifyListeners();
+  }
+
   void _setStatus(AuthStatus status) {
     _status = status;
     notifyListeners();
@@ -248,6 +332,17 @@ class AuthViewModel extends ChangeNotifier {
   void _setError(String message) {
     _errorMessage = message;
     _status = AuthStatus.error;
+    notifyListeners();
+  }
+
+  void _setResetStatus(AuthStatus status) {
+    _resetStatus = status;
+    notifyListeners();
+  }
+
+  void _setResetError(String message) {
+    _resetErrorMessage = message;
+    _resetStatus = AuthStatus.error;
     notifyListeners();
   }
 }
