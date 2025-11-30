@@ -12,6 +12,10 @@ class ChildrenTab extends StatelessWidget {
   final void Function(User child) onChatChild;
 
   /// Tạo tài khoản con mới
+  final VoidCallback? onCreateChild;
+
+  /// Xóa một con
+  final void Function(User child)? onDeleteChild;
   final VoidCallback onCreateChild;
 
   /// Xóa một con
@@ -79,6 +83,9 @@ class ChildrenTab extends StatelessWidget {
                               tooltip: 'Xóa tài khoản con',
                               icon: const Icon(Icons.delete_outline,
                                   color: Colors.redAccent),
+                              onPressed: onDeleteChild == null
+                                  ? null
+                                  : () => onDeleteChild!(child),
                               onPressed: () => onDeleteChild(child),
                             ),
                             const Icon(Icons.arrow_forward_ios, size: 16),
