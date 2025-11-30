@@ -280,15 +280,22 @@ class AuthViewModel extends ChangeNotifier {
 
   // ================= PARENT FOR CHILD =================
   Future<void> loadParentForChild() async {
+    if (_currentUser == null || _currentUser!.role != 'con') return;
+
+    final parentId = _currentUser!.parentId;
+    if (parentId == null || parentId.isEmpty) return;
+
+    _errorMessage = '';
+    _setStatus(AuthStatus.loading);
+
     try {
-      if (_currentUser == null) return;
-      if (_currentUser!.role != 'con') return;
+      final parent = await _authRepository.loadUserById(parentId);
+      if (parent == null) {
+        throw Exception('Không tìm thấy tài khoản cha/mẹ');
+      }
 
-      final parentId = _currentUser!.parentId;
-      if (parentId == null || parentId.isEmpty) return;
-
-      _parentUser = await _authRepository.loadUserById(parentId);
-      notifyListeners();
+      _parentUser = parent;
+      _setStatus(AuthStatus.success);
     } catch (e) {
       _setError(e.toString());
     }

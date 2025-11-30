@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -108,7 +110,26 @@ class AuthRepositoryImpl implements AuthRepository {
       final snapshot = await _database.ref('users/$uid').get();
       if (!snapshot.exists) return null;
 
-      final json = Map<String, dynamic>.from(snapshot.value as Map);
+      final raw = snapshot.value;
+
+      Map<String, dynamic>? json;
+      if (raw is Map) {
+        json = Map<String, dynamic>.from(raw as Map);
+      } else if (raw is String) {
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is Map) {
+            json = Map<String, dynamic>.from(decoded as Map);
+          }
+        } catch (_) {
+          // ignore decode failure, handled by null check below
+        }
+      }
+
+      if (json == null) {
+        throw Exception('Dữ liệu tài khoản không hợp lệ');
+      }
+
       return User.fromJson(json);
     } catch (e) {
       throw Exception('Lỗi load user theo id: $e');
