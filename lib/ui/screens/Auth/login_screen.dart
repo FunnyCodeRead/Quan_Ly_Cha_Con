@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:quan_ly_cha_con/repositories/location_repository.dart';
+import 'package:quan_ly_cha_con/ui/screens/Auth/forgot_password_screen.dart';
 import 'package:quan_ly_cha_con/ui/screens/Auth/register_screen.dart';
 import 'package:quan_ly_cha_con/ui/screens/child/ChildMainScreen.dart';
 import 'package:quan_ly_cha_con/ui/screens/parent/ParentMainScreen.dart';
@@ -91,8 +92,18 @@ class _LoginScreenState extends State<LoginScreen> {
                         );
                       }
                     },
-                    child: const Text('Đăng Nhập'),
+                  child: const Text('Đăng Nhập'),
                   ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ForgotPasswordScreen(),
+                      ),
+                    );
+                  },
+                  child: const Text('Quên mật khẩu? Gửi mã OTP'),
+                ),
                 const SizedBox(height: 16),
                 TextButton(
                   onPressed: () {

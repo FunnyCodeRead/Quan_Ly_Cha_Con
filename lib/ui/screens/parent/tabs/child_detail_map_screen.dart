@@ -4,8 +4,24 @@ import 'package:latlong2/latlong.dart' as osm;
 import 'package:provider/provider.dart';
 
 import 'package:quan_ly_cha_con/models/location_data.dart';
-import 'package:quan_ly_cha_con/viewmodel/parent/parent_location_view_model.dart';
 import 'package:quan_ly_cha_con/utils/latlng_utils.dart';
+import 'package:quan_ly_cha_con/viewmodel/parent/parent_location_view_model.dart';
+
+class _StopInfo {
+  final osm.LatLng position;
+  final Duration duration;
+  final int visitCount;
+  final DateTime start;
+  final DateTime end;
+
+  _StopInfo({
+    required this.position,
+    required this.duration,
+    required this.visitCount,
+    required this.start,
+    required this.end,
+  });
+}
 
 class ChildDetailMapScreen extends StatefulWidget {
   final String childId;
@@ -22,9 +38,11 @@ class ChildDetailMapScreen extends StatefulWidget {
 class _ChildDetailMapScreenState extends State<ChildDetailMapScreen> {
   final MapController _mapController = MapController();
 
+  List<LocationData> _history = [];
   List<osm.LatLng> _trail = [];
   List<Marker> _markers = [];
   List<Polyline> _polylines = [];
+  List<_StopInfo> _stops = [];
 
   @override
   void initState() {
@@ -36,10 +54,13 @@ class _ChildDetailMapScreenState extends State<ChildDetailMapScreen> {
     final viewModel = context.read<ParentLocationViewModel>();
     final history = await viewModel.loadLocationHistory(widget.childId);
 
+    _history = history;
     _trail = history
         .map((e) => osm.LatLng(e.latitude, e.longitude))
         .where(isValidLatLng)
         .toList();
+
+    _recomputeStops();
 
     _buildLayers();
 
@@ -58,6 +79,39 @@ class _ChildDetailMapScreenState extends State<ChildDetailMapScreen> {
         _mapController.move(_trail.first, 16);
       }
     });
+  }
+
+  void _handleMapTap(osm.LatLng latlng) {
+    if (_trail.isEmpty) return;
+
+    // Chỉ phản hồi khi tap gần đường đi
+    final nearestKm = _distanceToTrailKm(latlng);
+    if (nearestKm > 0.2) return;
+
+    _showStopsSheet();
+  }
+
+  double _distanceToTrailKm(osm.LatLng tap) {
+    double minDistance = double.infinity;
+    for (final point in _trail) {
+      final temp = LocationData(
+        latitude: point.latitude,
+        longitude: point.longitude,
+        accuracy: 0,
+        timestamp: 0,
+      ).distanceTo(
+        LocationData(
+          latitude: tap.latitude,
+          longitude: tap.longitude,
+          accuracy: 0,
+          timestamp: 0,
+        ),
+      );
+      if (temp < minDistance) {
+        minDistance = temp;
+      }
+    }
+    return minDistance;
   }
 
   void _buildLayers() {
@@ -88,6 +142,21 @@ class _ChildDetailMapScreenState extends State<ChildDetailMapScreen> {
         ),
       );
 
+      for (final stop in _stops) {
+        _markers.add(
+          Marker(
+            point: stop.position,
+            width: 32,
+            height: 32,
+            child: const Icon(
+              Icons.pause_circle_filled,
+              color: Colors.deepPurple,
+              size: 28,
+            ),
+          ),
+        );
+      }
+
       _markers.add(
         Marker(
           point: _trail.last,
@@ -103,6 +172,64 @@ class _ChildDetailMapScreenState extends State<ChildDetailMapScreen> {
     }
 
     setState(() {});
+  }
+
+  void _recomputeStops() {
+    _stops = [];
+    if (_history.length < 2) return;
+
+    const double stayThresholdKm = 0.12; // khoảng 120m
+    const int minStopMillis = 2 * 60 * 1000; // 2 phút
+
+    int startIndex = 0;
+
+    for (int i = 1; i < _history.length; i++) {
+      final prev = _history[i - 1];
+      final current = _history[i];
+      final movedKm = prev.distanceTo(current);
+
+      if (movedKm <= stayThresholdKm) {
+        continue;
+      }
+
+      _maybeAddStop(startIndex, i - 1, minStopMillis);
+      startIndex = i;
+    }
+
+    _maybeAddStop(startIndex, _history.length - 1, minStopMillis);
+
+    _stops.sort(
+        (a, b) => b.duration.inMilliseconds.compareTo(a.duration.inMilliseconds));
+  }
+
+  void _maybeAddStop(int startIdx, int endIdx, int minStopMillis) {
+    if (startIdx >= endIdx) return;
+
+    final start = _history[startIdx];
+    final end = _history[endIdx];
+    final durationMs = end.timestamp - start.timestamp;
+    if (durationMs < minStopMillis) return;
+
+    double avgLat = 0;
+    double avgLng = 0;
+    for (int i = startIdx; i <= endIdx; i++) {
+      avgLat += _history[i].latitude;
+      avgLng += _history[i].longitude;
+    }
+
+    final count = endIdx - startIdx + 1;
+    avgLat /= count;
+    avgLng /= count;
+
+    _stops.add(
+      _StopInfo(
+        position: osm.LatLng(avgLat, avgLng),
+        duration: Duration(milliseconds: durationMs),
+        visitCount: count,
+        start: DateTime.fromMillisecondsSinceEpoch(start.timestamp),
+        end: DateTime.fromMillisecondsSinceEpoch(end.timestamp),
+      ),
+    );
   }
 
   @override
@@ -126,14 +253,17 @@ class _ChildDetailMapScreenState extends State<ChildDetailMapScreen> {
         stream: viewModel.watchChildLocation(widget.childId),
         builder: (context, snapshot) {
           if (snapshot.hasData) {
+            final loc = snapshot.data!;
             final newPoint = osm.LatLng(
-              snapshot.data!.latitude,
-              snapshot.data!.longitude,
+              loc.latitude,
+              loc.longitude,
             );
 
             if (isValidLatLng(newPoint) &&
                 (_trail.isEmpty || _trail.last != newPoint)) {
+              _history.add(loc);
               _trail.add(newPoint);
+              _recomputeStops();
               _buildLayers();
               _mapController.move(newPoint, _mapController.camera.zoom);
             }
@@ -150,6 +280,7 @@ class _ChildDetailMapScreenState extends State<ChildDetailMapScreen> {
               initialZoom: 16,
               minZoom: 3,
               maxZoom: 19,
+              onTap: (_, latlng) => _handleMapTap(latlng),
             ),
             children: [
               TileLayer(
@@ -192,5 +323,45 @@ class _ChildDetailMapScreenState extends State<ChildDetailMapScreen> {
         ],
       ),
     );
+  }
+
+  void _showStopsSheet() {
+    if (_stops.isEmpty) return;
+
+    showModalBottomSheet(
+      context: context,
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Điểm dừng nổi bật',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              ..._stops.map(
+                (stop) => ListTile(
+                  leading: const Icon(Icons.pause_circle_outline),
+                  title: Text(
+                    'Dừng ${(stop.duration.inMinutes)} phút tại (${stop.position.latitude.toStringAsFixed(4)}, ${stop.position.longitude.toStringAsFixed(4)})',
+                  ),
+                  subtitle: Text(
+                    'Từ ${_formatTime(stop.start)} đến ${_formatTime(stop.end)} · ${stop.visitCount} lần ghi nhận',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatTime(DateTime dt) {
+    final twoDigits = (int n) => n.toString().padLeft(2, '0');
+    return '${twoDigits(dt.hour)}:${twoDigits(dt.minute)}';
   }
 }

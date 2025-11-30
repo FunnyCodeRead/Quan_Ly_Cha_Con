@@ -22,6 +22,15 @@ abstract class AuthRepository {
 
   /// ✅ nâng cấp premium cho CHA
   Future<void> upgradeToPremium(String parentUid);
+
+  /// Quên mật khẩu: gửi email chứa mã OTP đặt lại mật khẩu
+  Future<void> sendPasswordResetOtp(String email);
+
+  /// Xác nhận mã OTP và đặt lại mật khẩu mới
+  Future<void> confirmPasswordReset({
+    required String otpCode,
+    required String newPassword,
+  });
 }
 
 class AuthRepositoryImpl implements AuthRepository {
@@ -193,6 +202,32 @@ class AuthRepositoryImpl implements AuthRepository {
       });
     } catch (e) {
       throw Exception("Nâng cấp premium thất bại: $e");
+    }
+  }
+
+  @override
+  Future<void> sendPasswordResetOtp(String email) async {
+    try {
+      await _firebaseAuth.sendPasswordResetEmail(email: email);
+    } catch (e) {
+      throw Exception('Gửi mã OTP thất bại: $e');
+    }
+  }
+
+  @override
+  Future<void> confirmPasswordReset({
+    required String otpCode,
+    required String newPassword,
+  }) async {
+    try {
+      // Kiểm tra mã OTP hợp lệ trước khi xác nhận
+      await _firebaseAuth.verifyPasswordResetCode(otpCode);
+      await _firebaseAuth.confirmPasswordReset(
+        code: otpCode,
+        newPassword: newPassword,
+      );
+    } catch (e) {
+      throw Exception('Đặt lại mật khẩu thất bại: $e');
     }
   }
 
