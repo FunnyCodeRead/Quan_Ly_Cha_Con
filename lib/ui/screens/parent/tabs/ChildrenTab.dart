@@ -16,6 +16,10 @@ class ChildrenTab extends StatelessWidget {
 
   /// Xóa một con
   final void Function(User child)? onDeleteChild;
+  final VoidCallback onCreateChild;
+
+  /// Xóa một con
+  final void Function(User child) onDeleteChild;
 
   const ChildrenTab({
     Key? key,
@@ -82,6 +86,7 @@ class ChildrenTab extends StatelessWidget {
                               onPressed: onDeleteChild == null
                                   ? null
                                   : () => onDeleteChild!(child),
+                              onPressed: () => onDeleteChild(child),
                             ),
                             const Icon(Icons.arrow_forward_ios, size: 16),
                           ],
