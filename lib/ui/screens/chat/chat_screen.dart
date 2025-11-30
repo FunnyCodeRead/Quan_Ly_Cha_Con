@@ -22,6 +22,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _textCtrl = TextEditingController();
   late final String _chatId;
   bool _askedKey = false;
+  String _chatSecurity = 'free';
 
   @override
   void initState() {
@@ -34,12 +35,26 @@ class _ChatScreenState extends State<ChatScreen> {
     // ✅ cực quan trọng: tạo chat xong rồi mới listen (tránh PERMISSION_DENIED)
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final repo = context.read<ChatRepository>();
-      await repo.ensureChatExists(_chatId, [me, widget.child.uid]);
+      try {
+        await repo.ensureChatExists(_chatId, [me, widget.child.uid]);
 
-      if (!mounted) return;
-      context.read<ChatViewModel>().listenChat(_chatId);
+        final security = await repo.getChatSecurityLevel(_chatId);
+        if (mounted) {
+          setState(() {
+            _chatSecurity = security;
+          });
+        }
 
-      _checkKeyFirstTime(meRole: authVM.currentUser!.role);
+        if (!mounted) return;
+        context.read<ChatViewModel>().listenChat(_chatId);
+
+        _checkKeyFirstTime(meRole: authVM.currentUser!.role);
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không tạo được cuộc chat: $e')),
+        );
+      }
     });
   }
 
@@ -60,6 +75,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final authVM = context.watch<AuthViewModel>();
     final me = authVM.currentUser!.uid;
     final meRole = authVM.currentUser!.role;
+    final hasSharedPremium = authVM.hasSharedPremium;
     final isPremiumParent = authVM.isPremiumParent;
 
     final chatVM = context.watch<ChatViewModel>();
@@ -134,11 +150,32 @@ class _ChatScreenState extends State<ChatScreen> {
                     );
 
                     try {
+                      final repo = context.read<ChatRepository>();
+                      final security = await repo.getChatSecurityLevel(_chatId);
+                      final hasPremiumParent =
+                          await repo.chatHasPremiumParent(_chatId);
+                      final latestSecurity = security;
+
+                      if (mounted && latestSecurity != _chatSecurity) {
+                        setState(() {
+                          _chatSecurity = latestSecurity;
+                        });
+                      }
+
+                      final meIsPremium = hasSharedPremium ||
+                          hasPremiumParent ||
+                          latestSecurity == 'e2ee';
+
                       await chatVM.send(
                         _chatId,
                         msg,
-                        meIsPremium: isPremiumParent, // ✅ chỉ cha premium
+                        meIsPremium: meIsPremium,
                       );
+                      if (meIsPremium && latestSecurity != 'e2ee' && mounted) {
+                        setState(() {
+                          _chatSecurity = 'e2ee';
+                        });
+                      }
                       _textCtrl.clear();
                     } catch (e) {
                       if (!mounted) return;
