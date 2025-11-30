@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:firebase_auth/firebase_auth.dart' as auth;
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:quan_ly_cha_con/models/user.dart';
 
@@ -13,17 +16,48 @@ abstract class AuthRepository {
     required String parentId,
   });
 
+  Future<void> deleteChild(String childId);
+
   Future<List<User>> loadChildrenForParent(String parentId);
   Future<User?> loadCurrentUser(String uid);
   Future<void> logout();
 
   /// ✅ nâng cấp premium cho CHA
   Future<void> upgradeToPremium(String parentUid);
+
+  /// Quên mật khẩu: gửi email chứa mã OTP đặt lại mật khẩu
+  Future<void> sendPasswordResetOtp(String email);
+
+  /// Xác nhận mã OTP và đặt lại mật khẩu mới
+  Future<void> confirmPasswordReset({
+    required String otpCode,
+    required String newPassword,
+  });
 }
 
 class AuthRepositoryImpl implements AuthRepository {
   final auth.FirebaseAuth _firebaseAuth = auth.FirebaseAuth.instance;
   final FirebaseDatabase _database = FirebaseDatabase.instance;
+  auth.FirebaseAuth? _secondaryAuth;
+
+  Future<auth.FirebaseAuth> _getSecondaryAuth() async {
+    if (_secondaryAuth != null) return _secondaryAuth!;
+
+    final defaultApp = Firebase.app();
+    FirebaseApp secondaryApp;
+
+    try {
+      secondaryApp = Firebase.app('secondary');
+    } catch (_) {
+      secondaryApp = await Firebase.initializeApp(
+        name: 'secondary',
+        options: defaultApp.options,
+      );
+    }
+
+    _secondaryAuth = auth.FirebaseAuth.instanceFor(app: secondaryApp);
+    return _secondaryAuth!;
+  }
 
   @override
   Future<User> register(String email, String password, String role) async {
@@ -76,7 +110,26 @@ class AuthRepositoryImpl implements AuthRepository {
       final snapshot = await _database.ref('users/$uid').get();
       if (!snapshot.exists) return null;
 
-      final json = Map<String, dynamic>.from(snapshot.value as Map);
+      final raw = snapshot.value;
+
+      Map<String, dynamic>? json;
+      if (raw is Map) {
+        json = Map<String, dynamic>.from(raw as Map);
+      } else if (raw is String) {
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is Map) {
+            json = Map<String, dynamic>.from(decoded as Map);
+          }
+        } catch (_) {
+          // ignore decode failure, handled by null check below
+        }
+      }
+
+      if (json == null) {
+        throw Exception('Dữ liệu tài khoản không hợp lệ');
+      }
+
       return User.fromJson(json);
     } catch (e) {
       throw Exception('Lỗi load user theo id: $e');
@@ -90,8 +143,9 @@ class AuthRepositoryImpl implements AuthRepository {
     required String parentId,
   }) async {
     try {
+      final secondaryAuth = await _getSecondaryAuth();
       final userCredential =
-      await _firebaseAuth.createUserWithEmailAndPassword(
+      await secondaryAuth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -109,11 +163,20 @@ class AuthRepositoryImpl implements AuthRepository {
       );
 
       await _database.ref('users/$childId').set(child.toJson());
-
-      await _firebaseAuth.signOut();
+      await secondaryAuth.signOut();
       return child;
     } catch (e) {
       throw Exception('Tạo tài khoản con thất bại: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteChild(String childId) async {
+    try {
+      await _database.ref('users/$childId').remove();
+      await _database.ref('locations/$childId').remove();
+    } catch (e) {
+      throw Exception('Xóa tài khoản con thất bại: $e');
     }
   }
 
@@ -160,6 +223,32 @@ class AuthRepositoryImpl implements AuthRepository {
       });
     } catch (e) {
       throw Exception("Nâng cấp premium thất bại: $e");
+    }
+  }
+
+  @override
+  Future<void> sendPasswordResetOtp(String email) async {
+    try {
+      await _firebaseAuth.sendPasswordResetEmail(email: email);
+    } catch (e) {
+      throw Exception('Gửi mã OTP thất bại: $e');
+    }
+  }
+
+  @override
+  Future<void> confirmPasswordReset({
+    required String otpCode,
+    required String newPassword,
+  }) async {
+    try {
+      // Kiểm tra mã OTP hợp lệ trước khi xác nhận
+      await _firebaseAuth.verifyPasswordResetCode(otpCode);
+      await _firebaseAuth.confirmPasswordReset(
+        code: otpCode,
+        newPassword: newPassword,
+      );
+    } catch (e) {
+      throw Exception('Đặt lại mật khẩu thất bại: $e');
     }
   }
 
