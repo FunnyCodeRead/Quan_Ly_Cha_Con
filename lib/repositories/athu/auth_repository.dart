@@ -64,18 +64,36 @@ class AuthRepositoryImpl implements AuthRepository {
   User? _parseUser(DataSnapshot snap) {
     if (!snap.exists || snap.value == null) return null;
 
+    Map<String, dynamic>? json;
     final raw = snap.value;
 
-    Map<String, dynamic>? json;
+    try {
+      if (raw is Map) {
+        json = raw.map((key, value) => MapEntry(key.toString(), value));
+      } else if (raw is String) {
+        // Dữ liệu có thể bị lưu dưới dạng chuỗi JSON (thậm chí lồng nhau)
+        dynamic decoded;
 
-    if (raw is Map) {
-      json = Map<String, dynamic>.from(raw as Map);
-    } else if (raw is String) {
-      // phòng trường hợp data bị lưu stringify
-      final decoded = jsonDecode(raw);
-      if (decoded is Map) {
-        json = Map<String, dynamic>.from(decoded as Map);
+        try {
+          decoded = jsonDecode(raw);
+        } catch (_) {
+          decoded = null;
+        }
+
+        if (decoded is String) {
+          try {
+            decoded = jsonDecode(decoded);
+          } catch (_) {
+            decoded = null;
+          }
+        }
+
+        if (decoded is Map) {
+          json = decoded.map((key, value) => MapEntry(key.toString(), value));
+        }
       }
+    } catch (e) {
+      throw Exception('Dữ liệu user không hợp lệ: $e');
     }
 
     if (json == null) {

@@ -15,6 +15,8 @@ class ChildLocationViewModel extends ChangeNotifier {
   LocationData? _lastSentLocation; // kiểm tra di chuyển > 100m
   final List<LocationData> locationTrail = [];
   StreamSubscription<LocationData>? _gpsSub;
+  Timer? _keepAliveTimer;
+  String? _currentChildId;
 
   bool isSharing = false;
 
@@ -24,7 +26,9 @@ class ChildLocationViewModel extends ChangeNotifier {
   Future<void> startLocationSharing(String childId) async {
     if (isSharing) return;
 
-    final hasPermission = await _locationService.requestLocationPermission();
+    _currentChildId = childId;
+
+    final hasPermission = await _locationService.ensureServiceAndPermission();
     if (!hasPermission) {
       // không có quyền thì không share được
       isSharing = false;
@@ -60,6 +64,8 @@ class ChildLocationViewModel extends ChangeNotifier {
       },
       cancelOnError: false,
     );
+
+    _startKeepAliveLoop();
   }
 
   // 🚫 Không cho UI gọi stop nữa
@@ -88,6 +94,31 @@ class ChildLocationViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _gpsSub?.cancel();
+    _keepAliveTimer?.cancel();
     super.dispose();
+  }
+
+  void _startKeepAliveLoop() {
+    _keepAliveTimer?.cancel();
+
+    // Kiểm tra định kỳ để bảo đảm service/permission vẫn hoạt động
+    _keepAliveTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+      final childId = _currentChildId;
+      if (childId == null || childId.isEmpty) return;
+
+      final ok = await _locationService.ensureServiceAndPermission();
+      if (!ok) {
+        isSharing = false;
+        notifyListeners();
+        await Future.delayed(const Duration(seconds: 1));
+        startLocationSharing(childId);
+        return;
+      }
+
+      // Nếu vì lý do nào đó subscription đã mất, tạo lại
+      if (_gpsSub == null) {
+        startLocationSharing(childId);
+      }
+    });
   }
 }

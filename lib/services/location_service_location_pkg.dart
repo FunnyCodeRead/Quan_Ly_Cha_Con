@@ -3,7 +3,8 @@ import 'package:location/location.dart' as loc;
 import 'package:quan_ly_cha_con/models/location_data.dart';
 
 abstract class LocationServiceInterface {
-  Future<bool> requestLocationPermission();
+  /// Bảo đảm dịch vụ vị trí & quyền luôn được bật (kể cả khi quay lại từ nền).
+  Future<bool> ensureServiceAndPermission();
   Stream<LocationData> getLocationStream();
 }
 
@@ -11,7 +12,7 @@ class LocationServiceImpl implements LocationServiceInterface {
   final loc.Location _location = loc.Location();
 
   @override
-  Future<bool> requestLocationPermission() async {
+  Future<bool> ensureServiceAndPermission() async {
     // 1) bật GPS service
     bool serviceEnabled = await _location.serviceEnabled();
     if (!serviceEnabled) {
@@ -35,9 +36,10 @@ class LocationServiceImpl implements LocationServiceInterface {
 
     // 4) cấu hình tần suất & độ chính xác
     await _location.changeSettings(
-      accuracy: loc.LocationAccuracy.high,
-      distanceFilter: 50, // mét, giống bạn đặt minDistance
-      interval: 5000,     // ms Android (tuỳ chọn)
+      // Độ chính xác thấp hơn để tiết kiệm pin, đồng thời lọc bước di chuyển nhỏ
+      accuracy: loc.LocationAccuracy.low,
+      distanceFilter: 100, // mét
+      interval: 60000, // ms Android
     );
 
     // (Tuỳ chọn) tuỳ biến foreground notification Android
@@ -45,7 +47,7 @@ class LocationServiceImpl implements LocationServiceInterface {
       title: "Đang chia sẻ vị trí",
       subtitle: "Ứng dụng chạy nền để bảo vệ con",
       onTapBringToFront: true,
-    ); // chỉ Android, iOS bỏ qua :contentReference[oaicite:4]{index=4}
+    ); // chỉ Android, iOS bỏ qua
 
     return true;
   }
