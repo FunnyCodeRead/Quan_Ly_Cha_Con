@@ -12,10 +12,12 @@ import 'tabs/SettingsTab.dart';
 import 'tabs/parent_all_children_map_screen.dart';
 
 class ParentMainScreen extends StatefulWidget {
+  final List<User> children;
   final LocationRepository locationRepository;
 
   const ParentMainScreen({
     Key? key,
+    required this.children,
     required this.locationRepository,
   }) : super(key: key);
 
@@ -39,6 +41,7 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
     _authViewModel = context.read<AuthViewModel>();
     _locationViewModel = ParentLocationViewModel(widget.locationRepository);
 
+    // ✅ 1 listener đủ: update map + snackbar
     _authViewModel.addListener(_handleAuthChange);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -54,7 +57,6 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
     super.dispose();
   }
 
-  // ✅ 1 listener đủ hết: update map + snackbars
   void _handleAuthChange() {
     final ids = _authViewModel.children.map((c) => c.uid).toList();
     _locationViewModel.watchAllChildren(ids);
@@ -126,18 +128,18 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
               onPressed: isBusy
                   ? null
                   : () async {
-                      _lastAction = 'create';
-                      await _authViewModel.createChildAccount(
-                        name: nameController.text.trim(),
-                        email: emailController.text.trim(),
-                        password: passwordController.text.trim(),
-                      );
+                _lastAction = 'create';
+                await _authViewModel.createChildAccount(
+                  name: nameController.text.trim(),
+                  email: emailController.text.trim(),
+                  password: passwordController.text.trim(),
+                );
 
-                      if (mounted &&
-                          _authViewModel.status == AuthStatus.success) {
-                        Navigator.pop(context);
-                      }
-                    },
+                if (mounted &&
+                    _authViewModel.status == AuthStatus.success) {
+                  Navigator.pop(context);
+                }
+              },
               child: const Text('Tạo'),
             ),
           ],
