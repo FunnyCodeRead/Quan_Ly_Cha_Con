@@ -241,6 +241,8 @@ class AuthRepositoryImpl implements AuthRepository {
         final child = _parseUser(childSnap);
         if (child != null) list.add(child);
       }
+      print(snapshot.exists);   // phải true
+      print(snapshot.value);    // phải ra Map children
       return list;
     } catch (e) {
       throw Exception('Lỗi tải con: $e');

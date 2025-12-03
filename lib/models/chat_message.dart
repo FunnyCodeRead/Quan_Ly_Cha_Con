@@ -22,16 +22,37 @@ class ChatMessage {
     'timestamp': timestamp,
   };
 
+
   factory ChatMessage.fromDoc(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
+    final raw = doc.data();
+
+    // Doc rỗng
+    if (raw == null) {
+      return ChatMessage(
+        id: doc.id,
+        senderId: '',
+        receiverId: '',
+        text: '',
+        timestamp: Timestamp.now(),
+      );
+    }
+
+    // Doc bị lưu sai kiểu (String/List/...) -> báo rõ doc nào lỗi
+    if (raw is! Map) {
+      throw Exception(
+        "Message doc ${doc.id} không phải Map. type=${raw.runtimeType}, value=$raw",
+      );
+    }
+
+    final data = Map<String, dynamic>.from(raw);
+
+    final ts = data['timestamp'];
     return ChatMessage(
       id: doc.id,
-      senderId: data['senderId'] ?? '',
-      receiverId: data['receiverId'] ?? '',
-      text: data['text'] ?? '',
-      timestamp: (data['timestamp'] is Timestamp)
-          ? data['timestamp']
-          : Timestamp.now(),
+      senderId: data['senderId']?.toString() ?? '',
+      receiverId: data['receiverId']?.toString() ?? '',
+      text: data['text']?.toString() ?? '',
+      timestamp: ts is Timestamp ? ts : Timestamp.now(),
     );
   }
 
