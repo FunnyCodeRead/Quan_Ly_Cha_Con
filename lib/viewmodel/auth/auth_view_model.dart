@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
 import 'package:quan_ly_cha_con/models/user.dart';
 import 'package:quan_ly_cha_con/repositories/athu/auth_repository.dart';
 import 'package:quan_ly_cha_con/services/auth/session_manager.dart';
+import 'package:quan_ly_cha_con/viewmodel/children/child_location_view_model.dart';
 
 enum AuthStatus { initial, loading, success, error }
 
@@ -40,11 +43,9 @@ class AuthViewModel extends ChangeNotifier {
   bool get isLoggedIn => _currentUser != null;
   bool get isParent => _currentUser?.role == 'cha';
 
-  /// ✅ CHA premium thì true, CON luôn false
   bool get isPremiumParent =>
       _currentUser?.role == 'cha' && (_currentUser?.isPremium ?? false);
 
-  /// Quyền premium chia sẻ cho cả cha và con (nếu cha đã nâng cấp)
   bool get hasSharedPremium =>
       (_currentUser?.isPremium ?? false) || (_parentUser?.isPremium ?? false);
 
@@ -69,7 +70,6 @@ class AuthViewModel extends ChangeNotifier {
       }
 
       final user = await _authRepository.register(email, password, role);
-
 
       _currentUser = user.copyWith(isPremium: user.isPremium);
 
@@ -156,8 +156,13 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> logout() async {
+  /// ✅ LOGOUT CHUẨN: con thì dừng share trước, rồi mới signOut
+  Future<void> logout(BuildContext context) async {
     try {
+      if (_currentUser?.role == 'con') {
+        await context.read<ChildLocationViewModel>().stopSharingOnLogout();
+      }
+
       await _authRepository.logout();
       await _sessionManager.clearSession();
 
@@ -185,7 +190,7 @@ class AuthViewModel extends ChangeNotifier {
       await _authRepository.sendPasswordResetOtp(email);
       _lastResetEmail = email;
       _resetMessage =
-          'Đã gửi mã OTP đặt lại mật khẩu tới email. Vui lòng kiểm tra hộp thư.';
+      'Đã gửi mã OTP đặt lại mật khẩu tới email. Vui lòng kiểm tra hộp thư.';
       _setResetStatus(AuthStatus.success);
     } catch (e) {
       _setResetError(e.toString());
@@ -215,7 +220,7 @@ class AuthViewModel extends ChangeNotifier {
       );
 
       _resetMessage =
-          'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập với mật khẩu mới.';
+      'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập với mật khẩu mới.';
       _setResetStatus(AuthStatus.success);
     } catch (e) {
       _setResetError(e.toString());
@@ -280,15 +285,22 @@ class AuthViewModel extends ChangeNotifier {
 
   // ================= PARENT FOR CHILD =================
   Future<void> loadParentForChild() async {
+    if (_currentUser == null || _currentUser!.role != 'con') return;
+
+    final parentId = _currentUser!.parentId;
+    if (parentId == null || parentId.isEmpty) return;
+
+    _errorMessage = '';
+    _setStatus(AuthStatus.loading);
+
     try {
-      if (_currentUser == null) return;
-      if (_currentUser!.role != 'con') return;
+      final parent = await _authRepository.loadUserById(parentId);
+      if (parent == null) {
+        throw Exception('Không tìm thấy tài khoản cha/mẹ');
+      }
 
-      final parentId = _currentUser!.parentId;
-      if (parentId == null || parentId.isEmpty) return;
-
-      _parentUser = await _authRepository.loadUserById(parentId);
-      notifyListeners();
+      _parentUser = parent;
+      _setStatus(AuthStatus.success);
     } catch (e) {
       _setError(e.toString());
     }

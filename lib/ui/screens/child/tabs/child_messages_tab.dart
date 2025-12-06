@@ -15,16 +15,21 @@ class _ChildMessagesTabState extends State<ChildMessagesTab> {
   bool _requestedParent = false;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
+  void initState() {
+    super.initState();
 
-    if (_requestedParent) return;
+    // ✅ gọi sau frame để tránh notify during build
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _requestedParent) return;
 
-    final authVM = context.read<AuthViewModel>();
-    if (authVM.currentUser?.role == 'con') {
-      _requestedParent = true;
-      authVM.loadParentForChild();
-    }
+      final authVM = context.read<AuthViewModel>();
+      final me = authVM.currentUser;
+
+      if (me?.role == 'con') {
+        _requestedParent = true;
+        await authVM.loadParentForChild();
+      }
+    });
   }
 
   @override
@@ -64,9 +69,9 @@ class _ChildMessagesTabState extends State<ChildMessagesTab> {
               ),
               const SizedBox(height: 12),
               ElevatedButton.icon(
-                onPressed: () {
+                onPressed: () async {
                   authVM.clearError();
-                  authVM.loadParentForChild();
+                  await authVM.loadParentForChild();
                 },
                 icon: const Icon(Icons.refresh),
                 label: const Text('Thử lại'),

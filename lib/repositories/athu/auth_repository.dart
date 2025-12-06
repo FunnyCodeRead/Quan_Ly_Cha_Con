@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -33,6 +35,7 @@ abstract class AuthRepository {
   });
 }
 
+
 class AuthRepositoryImpl implements AuthRepository {
   final auth.FirebaseAuth _firebaseAuth = auth.FirebaseAuth.instance;
   final FirebaseDatabase _database = FirebaseDatabase.instance;
@@ -57,6 +60,53 @@ class AuthRepositoryImpl implements AuthRepository {
     return _secondaryAuth!;
   }
 
+  // ---------- PARSE USER SAFE ----------
+  User? _parseUser(DataSnapshot snap) {
+    if (!snap.exists || snap.value == null) return null;
+
+    Map<String, dynamic>? json;
+    final raw = snap.value;
+
+    try {
+      if (raw is Map) {
+        json = raw.map((key, value) => MapEntry(key.toString(), value));
+      } else if (raw is String) {
+        // Dữ liệu có thể bị lưu dưới dạng chuỗi JSON (thậm chí lồng nhau)
+        dynamic decoded;
+
+        try {
+          decoded = jsonDecode(raw);
+        } catch (_) {
+          decoded = null;
+        }
+
+        if (decoded is String) {
+          try {
+            decoded = jsonDecode(decoded);
+          } catch (_) {
+            decoded = null;
+          }
+        }
+
+        if (decoded is Map) {
+          json = decoded.map((key, value) => MapEntry(key.toString(), value));
+        }
+      }
+    } catch (e) {
+      throw Exception('Dữ liệu user không hợp lệ: $e');
+    }
+
+    if (json == null) {
+      throw Exception('Dữ liệu user không hợp lệ: ${raw.runtimeType}');
+    }
+
+    // DB realtime thường không có field uid => lấy từ key
+    json['uid'] ??= snap.key ?? '';
+
+    return User.fromJson(json);
+  }
+
+  // ---------- AUTH ----------
   @override
   Future<User> register(String email, String password, String role) async {
     try {
@@ -74,7 +124,7 @@ class AuthRepositoryImpl implements AuthRepository {
         email: email,
         role: role,
         name: '',
-        isPremium: false, // ✅ default
+        isPremium: false,
       );
 
       await _database.ref('users/$uid').set(user.toJson());
@@ -95,25 +145,39 @@ class AuthRepositoryImpl implements AuthRepository {
       final uid = userCredential.user?.uid;
       if (uid == null) throw Exception('UID không hợp lệ');
 
-      final snapshot = await _database.ref('users/$uid').get();
-      final json = Map<String, dynamic>.from(snapshot.value as Map);
-      return User.fromJson(json);
+      final snap = await _database.ref('users/$uid').get();
+      final user = _parseUser(snap);
+
+      if (user == null) {
+        throw Exception("User chưa có dữ liệu trong database");
+      }
+      return user;
     } catch (e) {
       throw Exception('Đăng nhập thất bại: $e');
     }
   }
+
   @override
   Future<User?> loadUserById(String uid) async {
     try {
-      final snapshot = await _database.ref('users/$uid').get();
-      if (!snapshot.exists) return null;
-
-      final json = Map<String, dynamic>.from(snapshot.value as Map);
-      return User.fromJson(json);
+      final snap = await _database.ref('users/$uid').get();
+      return _parseUser(snap);
     } catch (e) {
       throw Exception('Lỗi load user theo id: $e');
     }
   }
+
+  @override
+  Future<User?> loadCurrentUser(String uid) async {
+    try {
+      final snap = await _database.ref('users/$uid').get();
+      return _parseUser(snap);
+    } catch (e) {
+      throw Exception('Lỗi tải user: $e');
+    }
+  }
+
+  // ---------- CHILDREN ----------
   @override
   Future<User> createChildAccount({
     required String name,
@@ -123,6 +187,7 @@ class AuthRepositoryImpl implements AuthRepository {
   }) async {
     try {
       final secondaryAuth = await _getSecondaryAuth();
+
       final userCredential =
       await secondaryAuth.createUserWithEmailAndPassword(
         email: email,
@@ -138,10 +203,11 @@ class AuthRepositoryImpl implements AuthRepository {
         role: 'con',
         name: name,
         parentId: parentId,
-        isPremium: false, // ✅ con không cần premium
+        isPremium: false,
       );
 
       await _database.ref('users/$childId').set(child.toJson());
+
       await secondaryAuth.signOut();
       return child;
     } catch (e) {
@@ -171,35 +237,23 @@ class AuthRepositoryImpl implements AuthRepository {
       if (!snapshot.exists) return [];
 
       final list = <User>[];
-      for (final child in snapshot.children) {
-        final json = Map<String, dynamic>.from(child.value as Map);
-        list.add(User.fromJson(json));
+      for (final childSnap in snapshot.children) {
+        final child = _parseUser(childSnap);
+        if (child != null) list.add(child);
       }
+      print(snapshot.exists);   // phải true
+      print(snapshot.value);    // phải ra Map children
       return list;
     } catch (e) {
       throw Exception('Lỗi tải con: $e');
     }
   }
 
-  @override
-  Future<User?> loadCurrentUser(String uid) async {
-    try {
-      final snapshot = await _database.ref('users/$uid').get();
-      if (!snapshot.exists) return null;
-
-      final json = Map<String, dynamic>.from(snapshot.value as Map);
-      return User.fromJson(json);
-    } catch (e) {
-      throw Exception('Lỗi tải user: $e');
-    }
-  }
-
+  // ---------- PREMIUM / RESET / LOGOUT ----------
   @override
   Future<void> upgradeToPremium(String parentUid) async {
     try {
-      await _database.ref('users/$parentUid').update({
-        'isPremium': true,
-      });
+      await _database.ref('users/$parentUid').update({'isPremium': true});
     } catch (e) {
       throw Exception("Nâng cấp premium thất bại: $e");
     }
@@ -220,7 +274,6 @@ class AuthRepositoryImpl implements AuthRepository {
     required String newPassword,
   }) async {
     try {
-      // Kiểm tra mã OTP hợp lệ trước khi xác nhận
       await _firebaseAuth.verifyPasswordResetCode(otpCode);
       await _firebaseAuth.confirmPasswordReset(
         code: otpCode,
@@ -232,7 +285,6 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> logout() async {
-    await _firebaseAuth.signOut();
-  }
+  Future<void> logout() async => _firebaseAuth.signOut();
 }
+
