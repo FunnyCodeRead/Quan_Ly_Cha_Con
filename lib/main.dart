@@ -1,4 +1,3 @@
-// main.dart
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -56,13 +55,13 @@ class MyApp extends StatelessWidget {
           ),
         ),
 
-        // ✅ CHAT PROVIDERS (repo trước, vm sau)
+
+        // ✅ CHAT PROVIDERS
         Provider<ChatRepository>(
           create: (_) => ChatRepositoryImpl(),
         ),
         ChangeNotifierProvider<ChatViewModel>(
-          create: (context) =>
-              ChatViewModel(context.read<ChatRepository>()),
+          create: (context) => ChatViewModel(context.read<ChatRepository>()),
         ),
       ],
       child: MaterialApp(
@@ -106,6 +105,15 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
 
     final role = authVM.currentUser?.role;
+
+    // ✅ Nếu CON mở lại app -> auto share tiếp
+    if (role == "con") {
+      try {
+        await context.read<ChildLocationViewModel>().startLocationSharing();
+      } catch (e) {
+        debugPrint("Start sharing from splash failed: $e");
+      }
+    }
 
     final nextScreen = role == "cha"
         ? ParentMainScreen(
