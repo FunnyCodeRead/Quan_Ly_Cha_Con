@@ -10,6 +10,7 @@ import 'tabs/HomeTab.dart';
 import 'tabs/ChildrenTab.dart';
 import 'tabs/SettingsTab.dart';
 import 'tabs/parent_all_children_map_screen.dart';
+import 'tabs/parent_location_map_screen.dart';
 
 class ParentMainScreen extends StatefulWidget {
   final List<User> children;
@@ -205,10 +206,14 @@ class _ParentMainScreenState extends State<ParentMainScreen> {
 
       ChangeNotifierProvider.value(
         value: _locationViewModel,
-        child: ParentAllChildrenMapScreen(
-          children: children,
-          focusChildId: _selectedChild?.uid,
-        ),
+        child: _selectedChild == null
+            ? ParentAllChildrenMapScreen(
+                children: children,
+                focusChildId: _selectedChild?.uid,
+              )
+            : ParentLocationMapScreen(
+                childId: _selectedChild!.uid,
+              ),
       ),
 
       const SettingsTab(),
