@@ -3,6 +3,7 @@ import 'package:location/location.dart' as loc;
 import 'package:quan_ly_cha_con/models/location_data.dart';
 
 abstract class LocationServiceInterface {
+  
   /// Bảo đảm GPS bật + quyền foreground/background đầy đủ
   Future<bool> ensureServiceAndPermission();
 
@@ -41,6 +42,9 @@ class LocationServiceImpl implements LocationServiceInterface {
 
     // 4) setting để tiết kiệm pin + chỉ gửi khi di chuyển >=100m
     await _location.changeSettings(
+      // Độ chính xác thấp hơn để tiết kiệm pin, đồng thời lọc bước di chuyển nhỏ
+      accuracy: loc.LocationAccuracy.low,
+      
       accuracy: loc.LocationAccuracy.low,
       distanceFilter: 100,
       interval: 60000, // Android ms
@@ -51,6 +55,7 @@ class LocationServiceImpl implements LocationServiceInterface {
       title: "Đang chia sẻ vị trí",
       subtitle: "Ứng dụng chạy nền để bảo vệ con",
       onTapBringToFront: true,
+    ); // chỉ Android, iOS bỏ qua
     );
 
     return true;
