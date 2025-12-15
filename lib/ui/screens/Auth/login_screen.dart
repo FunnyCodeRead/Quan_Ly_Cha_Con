@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:quan_ly_cha_con/repositories/location_repository.dart';
@@ -7,6 +6,7 @@ import 'package:quan_ly_cha_con/ui/screens/Auth/register_screen.dart';
 import 'package:quan_ly_cha_con/ui/screens/child/ChildMainScreen.dart';
 import 'package:quan_ly_cha_con/ui/screens/parent/ParentMainScreen.dart';
 import 'package:quan_ly_cha_con/viewmodel/auth/auth_view_model.dart';
+import 'package:quan_ly_cha_con/viewmodel/children/child_location_view_model.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -31,6 +31,42 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleLogin(BuildContext context, AuthViewModel viewModel) async {
+    await viewModel.login(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
+
+    if (!mounted) return;
+
+    if (viewModel.status == AuthStatus.success) {
+      final role = viewModel.currentUser?.role;
+
+      if (role == 'con') {
+        try {
+          await context.read<ChildLocationViewModel>().startLocationSharing();
+        } catch (e) {
+          debugPrint("Start sharing after login failed: $e");
+        }
+      }
+
+      final screen = role == 'cha'
+          ? ParentMainScreen(
+        children: viewModel.children,
+        locationRepository: LocationRepositoryImpl(),
+      )
+          : const ChildMainScreen();
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => screen),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(viewModel.errorMessage)),
+      );
+    }
   }
 
   @override
@@ -62,38 +98,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   obscureText: true,
                 ),
                 const SizedBox(height: 24),
+
                 if (viewModel.status == AuthStatus.loading)
-                  const CircularProgressIndicator()
+                  const Center(child: CircularProgressIndicator())
                 else
                   ElevatedButton(
-                    onPressed: () async {
-                      await viewModel.login(
-                        email: _emailController.text,
-                        password: _passwordController.text,
-                      );
-
-                      if (viewModel.status == AuthStatus.success) {
-                        if (mounted) {
-                          final role = viewModel.currentUser?.role;
-                          final screen = role == 'cha'
-                              ? ParentMainScreen(
-                            children: viewModel.children,
-                            locationRepository: LocationRepositoryImpl(),
-                          )
-                              : const ChildMainScreen();
-
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(builder: (_) => screen),
-                          );
-                        }
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(viewModel.errorMessage)),
-                        );
-                      }
-                    },
-                  child: const Text('Đăng Nhập'),
+                    onPressed: () => _handleLogin(context, viewModel),
+                    child: const Text('Đăng Nhập'),
                   ),
+
                 TextButton(
                   onPressed: () {
                     Navigator.of(context).push(

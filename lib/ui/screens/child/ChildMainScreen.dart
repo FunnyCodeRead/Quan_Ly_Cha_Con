@@ -38,7 +38,7 @@ class _ChildMainScreenState extends State<ChildMainScreen>
     final childId = authVM.currentUser?.uid ?? '';
 
     if (childId.isNotEmpty) {
-      locationVM.startLocationSharing(childId);
+      locationVM.startLocationSharing();
     }
   }
 
