@@ -1,36 +1,58 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:quan_ly_cha_con/models/location_data.dart';
 import 'package:quan_ly_cha_con/repositories/location_repository.dart';
-
 import 'package:quan_ly_cha_con/services/location_service_location_pkg.dart';
-
-// <- đường dẫn tới LocationServiceInterface/Impl của bạn
 
 class ChildLocationViewModel extends ChangeNotifier {
   final LocationRepository _locationRepository;
   final LocationServiceInterface _locationService;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   LocationData? currentLocation;
-  LocationData? _lastSentLocation; // kiểm tra di chuyển > 100m
+  LocationData? _lastSentLocation;
   final List<LocationData> locationTrail = [];
+
   StreamSubscription<LocationData>? _gpsSub;
   Timer? _keepAliveTimer;
-  String? _currentChildId;
 
   bool isSharing = false;
 
   ChildLocationViewModel(this._locationRepository, this._locationService);
 
-  /// Bắt đầu chia sẻ vị trí tự động (không cho tắt)
-  Future<void> startLocationSharing(String childId) async {
+  String _requireChildUid() {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null || uid.isEmpty) {
+      throw Exception("Chưa đăng nhập -> không thể chia sẻ vị trí");
+    }
+    return uid;
+  }
+
+  /// ✅ Chỉ dùng khi LOGOUT
+  Future<void> stopSharingOnLogout() async {
+    await _gpsSub?.cancel();
+    _gpsSub = null;
+
+    _keepAliveTimer?.cancel();
+    _keepAliveTimer = null;
+
+    isSharing = false;
+    currentLocation = null;
+    locationTrail.clear();
+    _lastSentLocation = null;
+
+    notifyListeners();
+  }
+
+  /// ✅ Bắt đầu chia sẻ vị trí của CHÍNH CON đang login
+  Future<void> startLocationSharing() async {
     if (isSharing) return;
 
-    _currentChildId = childId;
+    _requireChildUid(); // chỉ để chắc chắn đang login
 
     final hasPermission = await _locationService.ensureServiceAndPermission();
     if (!hasPermission) {
-      // không có quyền thì không share được
       isSharing = false;
       notifyListeners();
       return;
@@ -43,10 +65,10 @@ class ChildLocationViewModel extends ChangeNotifier {
           (loc) async {
         currentLocation = loc;
 
-        // Nếu chưa gửi lần nào hoặc di chuyển > 100m (0.1 km)
+        // Nếu chưa gửi lần nào hoặc di chuyển > 100m
         if (_lastSentLocation == null ||
             _lastSentLocation!.distanceTo(loc) >= 0.1) {
-          await _locationRepository.updateChildLocation(childId, loc);
+          await _locationRepository.updateMyLocation(loc); // ✅ repo tự lấy uid
           _lastSentLocation = loc;
         }
 
@@ -54,26 +76,17 @@ class ChildLocationViewModel extends ChangeNotifier {
         notifyListeners();
       },
       onError: (e) {
-        // ❗ không cho tắt vĩnh viễn -> tự bật lại
         isSharing = false;
         notifyListeners();
 
         Future.delayed(const Duration(seconds: 2), () {
-          startLocationSharing(childId);
+          startLocationSharing();
         });
       },
       cancelOnError: false,
     );
 
     _startKeepAliveLoop();
-  }
-
-  // 🚫 Không cho UI gọi stop nữa
-  void _stopInternal() async {
-    await _gpsSub?.cancel();
-    _gpsSub = null;
-    isSharing = false;
-    notifyListeners();
   }
 
   Future<List<LocationData>> loadLocationHistory(String childId) async {
@@ -101,23 +114,18 @@ class ChildLocationViewModel extends ChangeNotifier {
   void _startKeepAliveLoop() {
     _keepAliveTimer?.cancel();
 
-    // Kiểm tra định kỳ để bảo đảm service/permission vẫn hoạt động
     _keepAliveTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
-      final childId = _currentChildId;
-      if (childId == null || childId.isEmpty) return;
-
       final ok = await _locationService.ensureServiceAndPermission();
       if (!ok) {
         isSharing = false;
         notifyListeners();
         await Future.delayed(const Duration(seconds: 1));
-        startLocationSharing(childId);
+        startLocationSharing();
         return;
       }
 
-      // Nếu vì lý do nào đó subscription đã mất, tạo lại
       if (_gpsSub == null) {
-        startLocationSharing(childId);
+        startLocationSharing();
       }
     });
   }
