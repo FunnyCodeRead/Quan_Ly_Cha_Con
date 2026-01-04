@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:quan_ly_cha_con/main.dart';
-import 'package:quan_ly_cha_con/services/auth/session_manager.dart';
+
+
+import '../lib/core/services/session_manager.dart';
 
 // Mock SessionManager
 class MockSessionManager extends Mock implements SessionManager {}

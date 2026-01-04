@@ -1,21 +1,30 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:quan_ly_cha_con/app/router/app_routes.dart';
+import 'package:quan_ly_cha_con/core/services/location/location_service.dart';
+import 'package:quan_ly_cha_con/core/services/session_manager.dart';
+import 'package:quan_ly_cha_con/core/theme/app_theme.dart';
+import 'package:quan_ly_cha_con/features/auth/data/datasources/auth_local_data_source.dart';
+import 'package:quan_ly_cha_con/features/auth/data/datasources/auth_remote_data_source.dart';
+import 'package:quan_ly_cha_con/features/auth/data/datasources/auth_remote_data_source_impl.dart';
+import 'package:quan_ly_cha_con/features/auth/data/repositories/auth_repository_impl.dart';
+import 'package:quan_ly_cha_con/features/auth/domain/repositories/auth_repository.dart';
+import 'package:quan_ly_cha_con/features/auth/presentation/pages/login_screen.dart';
+import 'package:quan_ly_cha_con/features/auth/presentation/viewmodel/auth_view_model.dart';
+import 'package:quan_ly_cha_con/features/child/presentation/pages/child_main_screen.dart';
+import 'package:quan_ly_cha_con/features/parent/location/data/repositories/location_repository_impl.dart';
 
-import 'package:quan_ly_cha_con/routes/app_routes.dart';
-import 'package:quan_ly_cha_con/repositories/athu/auth_repository.dart';
-import 'package:quan_ly_cha_con/repositories/location_repository.dart';
-import 'package:quan_ly_cha_con/services/auth/session_manager.dart';
-import 'package:quan_ly_cha_con/services/location_service_location_pkg.dart';
-import 'package:quan_ly_cha_con/ui/screens/Auth/login_screen.dart';
-import 'package:quan_ly_cha_con/ui/screens/child/ChildMainScreen.dart';
-import 'package:quan_ly_cha_con/ui/screens/parent/ParentMainScreen.dart';
-import 'package:quan_ly_cha_con/viewmodel/auth/auth_view_model.dart';
-import 'package:quan_ly_cha_con/viewmodel/parent/parent_location_view_model.dart';
-import 'package:quan_ly_cha_con/viewmodel/children/child_location_view_model.dart';
 
-import 'package:quan_ly_cha_con/repositories/chat/chat_repository.dart';
-import 'package:quan_ly_cha_con/viewmodel/chat/chat_view_model.dart';
+import 'package:quan_ly_cha_con/features/child/location/presentation/state/child_location_view_model.dart';
+
+
+import 'package:quan_ly_cha_con/features/chat/data/datasources/chat_local_data_source.dart';
+import 'package:quan_ly_cha_con/features/chat/data/datasources/chat_remote_data_source.dart';
+import 'package:quan_ly_cha_con/features/chat/data/repositories/chat_repository_impl.dart';
+import 'package:quan_ly_cha_con/features/chat/domain/repositories/chat_repository.dart';
+import 'package:quan_ly_cha_con/features/chat/presentation/viewmodel/chat_view_model.dart';
+import 'package:quan_ly_cha_con/features/parent/presentation/pages/parent_main_screen.dart';
 
 import 'firebase_options.dart';
 
@@ -37,17 +46,40 @@ class MyApp extends StatelessWidget {
       providers: [
         Provider<SessionManager>(create: (_) => sessionManager),
 
-        ChangeNotifierProvider<AuthViewModel>(
-          create: (_) => AuthViewModel(
-            authRepository: AuthRepositoryImpl(),
-            sessionManager: sessionManager,
+        // ✅ Auth datasources
+        Provider<AuthRemoteDataSource>(
+          create: (_) => AuthRemoteDataSourceImpl(),
+        ),
+        Provider<AuthLocalDataSource>(
+          create: (ctx) => AuthLocalDataSourceImpl(
+            ctx.read<SessionManager>(),
           ),
         ),
 
-        ChangeNotifierProvider<ParentLocationViewModel>(
-          create: (_) => ParentLocationViewModel(LocationRepositoryImpl()),
+        // ✅ Auth repository (inject remote + local)
+        Provider<AuthRepository>(
+          create: (ctx) => AuthRepositoryImpl(
+            remote: ctx.read<AuthRemoteDataSource>(),
+            local: ctx.read<AuthLocalDataSource>(),
+          ),
         ),
 
+        // ✅ AuthViewModel (inject repository)
+        ChangeNotifierProvider<AuthViewModel>(
+          create: (ctx) => AuthViewModel(
+            authRepository: ctx.read<AuthRepository>(),
+            sessionManager: ctx.read<SessionManager>(),
+          ),
+        ),
+
+
+        // ✅ CHAT PROVIDERS
+        Provider<ChatRepository>(
+          create: (_) => ChatRepositoryImpl(
+            remote: ChatRemoteDataSourceImpl(),
+            local: ChatLocalDataSourceImpl(),
+          ),
+        ),
         ChangeNotifierProvider<ChildLocationViewModel>(
           create: (_) => ChildLocationViewModel(
             LocationRepositoryImpl(),
@@ -56,17 +88,13 @@ class MyApp extends StatelessWidget {
         ),
 
 
-        // ✅ CHAT PROVIDERS
-        Provider<ChatRepository>(
-          create: (_) => ChatRepositoryImpl(),
-        ),
-        ChangeNotifierProvider<ChatViewModel>(
-          create: (context) => ChatViewModel(context.read<ChatRepository>()),
-        ),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(useMaterial3: true),
+        theme: AppTheme.light(seed: Colors.blue),
+        darkTheme: AppTheme.dark(seed: Colors.blue),
+
+        themeMode: ThemeMode.system,
         routes: AppRoutes.routes,
         home: _startScreen(sessionManager),
       ),
@@ -106,7 +134,6 @@ class _SplashScreenState extends State<SplashScreen> {
 
     final role = authVM.currentUser?.role;
 
-    // ✅ Nếu CON mở lại app -> auto share tiếp
     if (role == "con") {
       try {
         await context.read<ChildLocationViewModel>().startLocationSharing();
